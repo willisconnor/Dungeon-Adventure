@@ -1,92 +1,63 @@
-"""
-Dungeon Character "abstract" class
-@author Connor Willis
-@version 0.1
-"""
-import pygame
-from abc import ABC, abstractmethod
-from enum import Enum, auto
+from DungeonEntity import DungeonEntity, AnimationState, Direction
 
-
-#class for direction states left and right
-class Direction(Enum):
-    LEFT = auto()
-    RIGHT = auto()
-
-#for animation setup later on
-class AnimationState(Enum):
-    IDLE = auto()
-    WALKING = auto()
-    ATTACKING_1 = auto()
-    ATTACKING_2 = auto()
-    ATTACKING_3 = auto()
-    SPECIAL_SKILL = auto()
-    HURT = auto()
-    DYING = auto()
-    DEAD = auto()
-
-
-"""Abstract class for Dungeon Characters"""
-#sprites all the same size for PLAYERs only
-class DungeonCharacter(ABC):
-
-    def __init__(self, x, y, width, height, name, max_health, health, speed, animation_state):
-        self.x = x
-        self.y = y
+class DungeonCharacter(DungeonEntity):
+    """Base character class for both hero and enemy, inherits from DungeonEntity"""
+    def __init__(self, x, y,width, height, name, max_health, health, speed, damage, animation_state):
+        super().__init__(x, y, max_health)
+        self.speed = speed
+        self.damage = damage
         self.width = width
         self.height = height
         self.name = name
-        self.health = health
+        self.health = health #Do I need to pass in current health?
         self.max_health = max_health
-        self.speed = speed
-        self.direction = Direction.LEFT
         self.animation_state = animation_state.IDLE
         self.last_animation_state = animation_state.IDLE
         self.last_direction = Direction.LEFT
         self.animation_counter = 0
         self.speed = 0
-        self.is_alive = True
 
-        #combat properties
-        self.damage = 0
-        self.critical_chance = 0
-        self.critical_damage = 0
-        self.attack_range = 0
-        self.hitbox = pygame.Rect(0, 0, 0, 0)
-        self.is_invulnerable = False
-        self.invulnerable_timer = 0
 
-    @abstractmethod
+        #Animation properties
+        #setting frame rates for each aniimation state, should
+        #be determined in lower classes
+
+
+        #Combat properties
+        self.is_attacking = False
+        self.attack_combo = 0
+        self.attack_complete = True
+        self.attack_window = 0
+        self.hit_targets = set() #track whats been hit this attack
+
     def update(self, dt):
         """Update entity state """
-        pass
+        self._update_hitbox()
+        self._update_invulnerability(dt)
+        self.update_animation(dt)
+        self.update_attack_state(dt)
 
-    @abstractmethod
-    def take_damage(self, damage):
-        """handle taking damage"""
-        pass
-
-
-    def is_hit_by(self, attacker):
-        """handle being hit by another entity"""
+    def take_damage(self, amount):
+        """handles taking damage"""
         if not self.is_alive or self.is_invulnerable:
             return False
-        #check if attackers hitbox overlaps with entity's hitbox
-        return self.hitbox.colliderect(self.hitbox)
+
+        self.health -= amount
+
+        #set PLAYER invulnerability, might rethink placement
+        #actually, might just pass this to the hero?
 
 
-    def _update_hitbox(self):
-        """update hitbox based on entity position"""
-        """ Divided by 2 calculations put it near the center of sprite?"""
-        hitbox_width = self.width //2 #can change this whenever
-        hitbox_height = self.height //2
+    def _update_animation(self, dt):
+        """Update animation frame index"""
+        #get current frame rate for this animation state
+        current_frame_rate = self.frame_rates.get(self.animation_state, 6)
 
-        self.hitbox = pygame.Rect(self.x//2, self.y//2, hitbox_width, hitbox_height) #maybe tweak this later
+        #increment counter
+        self.animation_counter += dt *60 #convert to roughly 60 fps
 
-    def _update_invulnerability(self, dt):
-        """update invuln timer"""
-        if self.is_invulnerable:
-            self.invulnerable_timer -= dt
-            if self.invulnerable_timer <= 0:
-                self.is_invulnerable = False
-                self.invulnerable_timer = 0
+        #update frame when counter exceeds frame rate
+        if self.animation_counter >= current_frame_rate:
+            self.anmimation_counter = 0
+
+
