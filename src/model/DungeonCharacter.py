@@ -60,4 +60,46 @@ class DungeonCharacter(DungeonEntity):
         if self.animation_counter >= current_frame_rate:
             self.anmimation_counter = 0
 
+            #special handling for dying animation
+            if self.animation_state == AnimationState.DYING:
+                if self.frame.index >= self.get_frames_count(AnimationState.HURT) -1:
+                    self.animation_state = AnimationState.DEAD
+                    self.frame_index = 0
+                else:
+                    self.frame_index += 1
 
+            #Normal animation cycling
+            else:
+                frame_count = self.get_frames_count(self.animation_state)
+                self.frame_index = (self.frame_index + 1) %frame_count
+
+                #for attack animations, check if complete
+                if self.is_attacking and self.frame_index == 0:
+                    self._handle_attack_complete()
+
+    def _update_attack_state(self, dt):
+        """update attack combo window for combat"""
+        if self.attack_window > 0:
+            self.attack_window -= dt * 60
+            if self.attack_window <= 0:
+                self.attack_window = 0
+                if self.attack_complete:
+                    self.attack_combo = 0
+
+    def _handle_attack_complete(self):
+        """handle completion of an attack animatinon"""
+        self.attack_complete = True
+        self.attack_window = 20 # ~333 ms at 60 fps to chain attacks
+        #clear hit targets when an attack is complete
+        self.hit_targets.clear()
+
+        #if not chaining attacks, end attacking state
+        if self.attack_combo == 0:
+            self.is_attacking = False
+            self.animaiton_state = AnimationState.IDLE
+
+
+    def get_frames_count(self, state):
+        """get the number of frames for a givben animaiton state"""
+        #T H IS SHOUDL BE OVERRIDDEN IN CHILD CLASSES
+        return 4 #defaulkt value, should be overridden
