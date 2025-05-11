@@ -181,3 +181,102 @@ class Hero(DungeonCharacter):
         self.last_animation_state = self.animation_state
 
         #determine new animation state with priority for special abilities, attacks, and defending
+        if self.using_special:
+            new_state = AnimationState.SPECIAL
+        elif self.is_attacking:
+            if self.attack_combo == 1:
+                new_state = AnimationState.ATTACKING_1
+            elif self.attack_combo == 2:
+                new_state = AnimationState.ATTACKING_2
+            elif self.attack_combo == 3:
+                new_state = AnimationState.ATTACKING_3
+            else:
+                new_state = AnimationState.IDLE
+        elif self.is_defending:
+            new_state = AnimationState.DEFENDING
+        elif self.is_moving:
+            new_state = AnimationState.WALKING
+        else:
+            new_state = AnimationState.IDLE
+
+        #only change state if its different from current
+        if new_state != self.animation_state:
+            self.animation_stater = new_state
+
+            #only reset frame index if not chaining attacks
+            if not (self.is_attacking and self.last_animation_state in [AnimationState.ATTACKING_1, AnimationState.ATTACKING_2, AnimationState.ATTACKING_3] and
+                    self.animation_state in [AnimationState.ATTACKING_1, AnimationState.ATTACKING_2, AnimationState.ATTACKING_3]):
+                self.frame_index = 0
+                self.animation_counter = 0
+
+    def get_attack_hitbox(self):
+        #possibly update this based off of hitbox parameters passed in abstract class
+        #get hitbox for current attack
+        if not self.is_attacking and not self.using_special:
+            return None
+
+        #create attack hitbox based on character direction
+        width = self.attack_range
+        height = 80
+
+        if self.direction == Direction.RIGHT:
+            x = self.x + 25
+            y = self.y -height //2
+        else:
+            x = self.x - 25 -width
+            y = self.y - height //2
+
+        return pygame.Rect(x, y, width, height)
+
+    def attack(self, targets):
+        """Attempt to attack a list of target entities"""
+        if(not self.is_attacking and not self.using_special) or not self.is_alive:
+            return []
+
+        hit_targets = []
+        attack_hitbox = self.get_attack_hitbox()
+
+        if attack_hitbox:
+            for target in targets:
+                #skip targets already hit by this attack or by those that arent alive
+                if target in self.hit_targets or not target.is_alive:
+                    continue
+
+                #check collision with target's hitbox
+                if attack_hitbox.colliderect(target.hitbox):
+                    #calculate damage, might be modified by ability or potion
+                    damage = self.calculate_damage(target)
+                    #hit successful
+                    hit = target.take_damage(damage)
+                    if hit:
+                        self.hit_targets.add(target)
+                        hit_targets.append(target)
+
+        return hit_targets
+
+    def calculate_damage(self, target):
+        """Calculate damage to  be dealt to target, can be override by subclasses"""
+        return self.damage
+
+    def activate_special_ability(self):
+        """Activate heros special ability, to be implemented by child classes"""
+        self.using_special = True
+        self.special_cooldown_remaining = self.special_cooldown
+
+    def get_sprite_path(self, animation_state):
+        """Get the sprite path for a specific animaiton state"""
+        conn = sqlite3.connect('game_data.db')
+        c = conn.cursor()
+
+        c.execute('''
+            SELECT sprite_path
+            FROM hero_sprites
+            WHERE hero_type = ? AND animation_state = ?''', (self.hero_type, animation_state))
+
+        result = c.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+        else:
+            return f"assets/sprites/{self.hero_type}/{animation_state.name.lower()}.png"
