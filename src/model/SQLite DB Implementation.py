@@ -61,6 +61,120 @@ def initialize_database():
     c.executemany('INSERT INTO hero_stats VALUES (?,?,?,?,?,?)', hero_stats)
 
     #insert animation data for each hero
-    animation_data = []
+    animation_data = [
+        #knight animations
+        ('knight', AnimationState.IDLE.value, 4),
+        ('knight', AnimationState.WALKING.value, 8),
+        ('knight', AnimationState.ATTACKING_1.value, 5),
+        ('knight', AnimationState.ATTACKING_2.value, 4),
+        ('knight', AnimationState.ATTACKING_3.value, 4),
+        ('knight', AnimationState.HURT.value, 2),
+        ('knight', AnimationState.DEAD.value, 6),
+        #special skill block
+        ('knight', AnimationState.SPECIAL_SKILL.value, 5),
 
-    #define frame counts for each hero
+        #archer animations
+        ('archer', AnimationState.IDLE.value, 9),
+        ('archer', AnimationState.WALKING.value, 8),
+        #each attack is a shot
+        ('archer', AnimationState.ATTACKING_1.value, 14),
+        ('archer', AnimationState.ATTACKING_2.value, 14),
+        ('archer', AnimationState.ATTACKING_3.value, 14),
+        ('archer', AnimationState.HURT.value, 3),
+        ('archer', AnimationState.DEAD.value, 5),
+        #Deflect special attack, define in hero class
+        ('archer', AnimationState.SPECIAL_SKILL.value, 6),
+        #possibly store arrow sprite here
+        ('archer', AnimationState.Arrow.value, 1),
+
+        # Cleric animations
+        ('cleric', AnimationState.IDLE.value, 7),
+        ('cleric', AnimationState.WALKING.value, 8),
+        ('cleric', AnimationState.ATTACKING_1.value, 4),
+        ('cleric', AnimationState.ATTACKING_2.value, 4),
+        #no attack 3
+        ('cleric', AnimationState.HURT.value, 3),
+        ('cleric', AnimationState.DEAD.value, 6),
+        #fireball by pitbull starts playing
+        ('cleric', AnimationState.SPECIAL_SKILL.value, 8),
+        #store projectile sprites here?
+        ('cleric', AnimationState.FIREBALL.value, 12)
+    ]
+
+    c.executemany('INSERT INTO hero_animations VALUES (NULL,?,?,?)', animation_data)
+
+    #Insert sprite paths for each hero and animation state
+    #Format: hero_type, anmimation_state.value, sprite_path
+
+    sprite_paths = [
+        # Knight sprite paths
+        ('knight', AnimationState.IDLE.value, 'assets/sprites/heroes/Knight_1/knight/Idle.png'),
+        ('knight', AnimationState.WALKING.value, 'assets/sprites/heroes/Knight_1/knight/walk.png'),
+        ('knight', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/Knight_1/knight/Attack 1.png'),
+        ('knight', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/Knight_1/knight/Attack 2.png'),
+        ('knight', AnimationState.ATTACKING_3.value, 'assets/sprites/heroes/Knight_1/knight/Attack 3.png'),
+        ('knight', AnimationState.HURT.value, 'assets/sprites/heroes/Knight_1/knight/Hurt.png'),
+        ('knight', AnimationState.DEAD.value, 'assets/sprites/heroes/knight/Knight_1/Dead.png'),
+        ('knight', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/knight/Knight_1/Defend.png'),
+
+        # Archer sprite paths
+        ('archer', AnimationState.IDLE.value, 'assets/sprites/heroes/archer/Samurai_Archer/Idle.png'),
+        ('archer', AnimationState.WALKING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Run.png'),
+        ('archer', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
+        ('archer', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
+        ('archer', AnimationState.ATTACKING_3.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
+        ('archer', AnimationState.HURT.value, 'assets/sprites/heroes/archer/Samurai_Archer/Hurt.png'),
+        ('archer', AnimationState.DEAD.value, 'assets/sprites/heroes/archer/Samurai_Archer/Dead.png'),
+        ('archer', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/archer/Samurai_Archer/Attack_1.png'),
+        ('archer', AnimationState.Arrow.value, 'assets/sprites/heroes/archer/Samurai_Archer/Arrow.png'),
+
+        # Cleric sprite paths
+        ('cleric', AnimationState.IDLE.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Idle.png'),
+        ('cleric', AnimationState.WALKING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Run.png'),
+        ('cleric', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Attack_1.png'),
+        ('cleric', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Attack_2.png'),
+        ('cleric', AnimationState.HURT.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Hurt.png'),
+        ('cleric', AnimationState.DEAD.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Dead.png'),
+        ('cleric', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Fireball.png'),
+        ('cleric', AnimationState.FIREBALL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Charge.png')
+
+
+    ]
+
+    c.executemany('INSERT INTO hero_sprites VALUES (NULL,?,?,?)', sprite_paths)
+
+    #create enemy stats table
+    c.execute('''
+              CREATE TABLE enemy_stats
+              (
+                  enemy_type   TEXT PRIMARY KEY,
+                  max_health   INTEGER,
+                  speed        REAL,
+                  damage       INTEGER,
+                  attack_range INTEGER
+              )
+              ''')
+
+    # Create enemy animations table
+    c.execute('''
+              CREATE TABLE enemy_animations
+              (
+                  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                  enemy_type      TEXT,
+                  animation_state INTEGER,
+                  frame_count     INTEGER,
+                  FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
+              )
+              ''')
+
+    # Create enemy sprites table
+    c.execute('''
+              CREATE TABLE enemy_sprites
+              (
+                  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                  enemy_type      TEXT,
+                  animation_state INTEGER,
+                  sprite_path     TEXT,
+                  FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
+              )
+              ''')
