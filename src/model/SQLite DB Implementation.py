@@ -178,3 +178,63 @@ def initialize_database():
                   FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
               )
               ''')
+
+    # Insert enemy stats
+    enemy_stats = [
+        # enemy_type, max_health, speed, damage, attack_range
+        ('Skeleton_Archer', 80, 5, 8, 70),
+        ('Skeleton_Spearman', 80, 5, 8, 70),
+        ('Skeleton_Warrior', 80, 5, 8, 70),
+        ('Gorgon_1', 100, 4, 10, 75),
+        ('Gorgon_2', 100, 4, 10, 75),
+        ('Gorgon_3', 100, 4, 10, 75)
+    ]
+
+    #will need separate handling for boss demon thingy
+
+    c.executemany('INSERT INTO enemy_stats VALUES (?, ?, ?, ?, ?)', enemy_stats)
+
+    # Insert enemy animation data
+    enemy_animation_data = []
+
+    # Basic animation frames for all enemies
+    for enemy_type in ['Skeleton_Archer', 'Skeleton_Spearman', 'Skeleton_Warrior', 'Gorgon_1', 'Gorgon_2', 'Gorgon_3']:
+        enemy_animation_data.extend([
+            (enemy_type, AnimationState.IDLE.value, 4),
+            (enemy_type, AnimationState.WALKING.value, 6),
+            (enemy_type, AnimationState.ATTACKING_1.value, 5),
+            (enemy_type, AnimationState.HURT.value, 3),
+            (enemy_type, AnimationState.DYING.value, 5),
+            (enemy_type, AnimationState.DEAD.value, 1)
+        ])
+
+    c.executemany('INSERT INTO enemy_animations VALUES (NULL, ?, ?, ?)', enemy_animation_data)
+
+    # Insert enemy sprite paths
+    enemy_sprite_paths = []
+
+    # Generate sprite paths for each enemy type and animation state
+    for enemy_type in ['Skeleton_Archer', 'Skeleton_Spearman', 'Skeleton_Warrior', 'Gorgon_1', 'Gorgon_2', 'Gorgon_3']:
+        enemy_sprite_paths.extend([
+            (enemy_type, AnimationState.IDLE.value, f'assets/sprites/enemies/{enemy_type}/idle_sheet.png'),
+            (enemy_type, AnimationState.WALKING.value, f'assets/sprites/enemies/{enemy_type}/walking_sheet.png'),
+            (enemy_type, AnimationState.ATTACKING_1.value, f'assets/sprites/enemies/{enemy_type}/attack_sheet.png'),
+            (enemy_type, AnimationState.HURT.value, f'assets/sprites/enemies/{enemy_type}/hurt_sheet.png'),
+            (enemy_type, AnimationState.DYING.value, f'assets/sprites/enemies/{enemy_type}/dying_sheet.png'),
+            (enemy_type, AnimationState.DEAD.value, f'assets/sprites/enemies/{enemy_type}/dead_sheet.png')
+        ])
+
+    #Add boss sprite
+
+
+    c.executemany('INSERT INTO enemy_sprites VALUES (NULL, ?, ?, ?)', enemy_sprite_paths)
+
+    # Commit changes and close connection
+    conn.commit()
+    conn.close()
+
+    print("Database initialization completed successfully!")
+
+
+if __name__ == "__main__":
+    initialize_database()
