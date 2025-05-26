@@ -1,0 +1,855 @@
+Index: src/Model/main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import pygame\r\nimport random\r\nimport json\r\nimport xml.etree.ElementTree as ET\r\nimport os\r\nfrom enum import Enum\r\nfrom abc import ABC, abstractmethod\r\nfrom typing import List, Tuple, Optional, Dict\r\n\r\n# Initialize Pygame\r\npygame.init()\r\n\r\n# Constants\r\nSCREEN_WIDTH = 1200\r\nSCREEN_HEIGHT = 800\r\nTILE_SIZE = 32\r\nGRAVITY = 0.8\r\nJUMP_FORCE = -15\r\nPLAYER_SPEED = 5\r\n\r\n# Colors\r\nBLACK = (0, 0, 0)\r\nWHITE = (255, 255, 255)\r\nRED = (255, 0, 0)\r\nGREEN = (0, 255, 0)\r\nBLUE = (0, 0, 255)\r\nYELLOW = (255, 255, 0)\r\nPURPLE = (128, 0, 128)\r\nORANGE = (255, 165, 0)\r\nCYAN = (0, 255, 255)\r\n\r\n\r\nclass ItemType(Enum):\r\n    HEALING_POTION = \"healing\"\r\n    VISION_POTION = \"vision\"\r\n    PIT = \"pit\"\r\n    PILLAR_ABSTRACTION = \"abstraction\"\r\n    PILLAR_ENCAPSULATION = \"encapsulation\"\r\n    PILLAR_INHERITANCE = \"inheritance\"\r\n    PILLAR_POLYMORPHISM = \"polymorphism\"\r\n    ENTRANCE = \"entrance\"\r\n    EXIT = \"exit\"\r\n\r\n\r\nclass Direction(Enum):\r\n    NORTH = \"north\"\r\n    SOUTH = \"south\"\r\n    EAST = \"east\"\r\n    WEST = \"west\"\r\n\r\n\r\nclass TileMapLoader:\r\n    \"\"\"Utility class to load TMX tile maps and extract platform data\"\"\"\r\n\r\n    @staticmethod\r\n    def load_tmx(file_path: str) -> List[Tuple[int, int]]:\r\n        \"\"\"Load platform positions from TMX file\"\"\"\r\n        platforms = []\r\n        try:\r\n            tree = ET.parse(file_path)\r\n            root = tree.getroot()\r\n\r\n            # Get map dimensions\r\n            map_width = int(root.get('width', 0))\r\n            map_height = int(root.get('height', 0))\r\n            tile_width = int(root.get('tilewidth', TILE_SIZE))\r\n            tile_height = int(root.get('tileheight', TILE_SIZE))\r\n\r\n            # Find layer with platform data\r\n            for layer in root.findall('layer'):\r\n                data_element = layer.find('data')\r\n                if data_element is not None:\r\n                    # Parse CSV data\r\n                    csv_data = data_element.text.strip().replace('\\n', '').replace(' ', '')\r\n                    tile_ids = [int(x) for x in csv_data.split(',') if x]\r\n\r\n                    # Convert tile IDs to platform positions\r\n                    for i, tile_id in enumerate(tile_ids):\r\n                        if tile_id > 0:  # Non-zero tile ID means there's a platform\r\n                            x = (i % map_width) * tile_width\r\n                            y = (i // map_width) * tile_height\r\n                            platforms.append((x, y))\r\n\r\n        except Exception as e:\r\n            print(f\"Error loading TMX file: {e}\")\r\n            # Fallback to procedural generation if TMX loading fails\r\n            return TileMapLoader._generate_fallback_platforms()\r\n\r\n        return platforms\r\n\r\n    @staticmethod\r\n    def _generate_fallback_platforms() -> List[Tuple[int, int]]:\r\n        \"\"\"Generate fallback platforms if TMX loading fails\"\"\"\r\n        platforms = []\r\n\r\n        # Generate floor platforms\r\n        for x in range(0, SCREEN_WIDTH * 2, TILE_SIZE):\r\n            if random.random() > 0.2:  # Some gaps in the floor\r\n                platforms.append((x, SCREEN_HEIGHT - TILE_SIZE))\r\n\r\n        # Generate floating platforms\r\n        for _ in range(random.randint(5, 12)):\r\n            x = random.randint(0, SCREEN_WIDTH * 2 - TILE_SIZE)\r\n            y = random.randint(TILE_SIZE * 3, SCREEN_HEIGHT - TILE_SIZE * 3)\r\n            # Create platform clusters\r\n            cluster_size = random.randint(1, 4)\r\n            for i in range(cluster_size):\r\n                if x + i * TILE_SIZE < SCREEN_WIDTH * 2:\r\n                    platforms.append((x + i * TILE_SIZE, y))\r\n\r\n        return platforms\r\n\r\n\r\n# MODEL CLASSES\r\n\r\nclass GameObject(ABC):\r\n    \"\"\"Abstract base class for all game objects\"\"\"\r\n\r\n    def __init__(self, x: int, y: int, width: int, height: int):\r\n        self.x = x\r\n        self.y = y\r\n        self.width = width\r\n        self.height = height\r\n        self.rect = pygame.Rect(x, y, width, height)\r\n\r\n    @abstractmethod\r\n    def update(self):\r\n        pass\r\n\r\n    @abstractmethod\r\n    def render(self, surface: pygame.Surface, camera_x: int = 0):\r\n        pass\r\n\r\n\r\nclass Item(GameObject):\r\n    \"\"\"Base class for all collectible items\"\"\"\r\n\r\n    def __init__(self, x: int, y: int, item_type: ItemType, value: int = 0):\r\n        super().__init__(x, y, TILE_SIZE, TILE_SIZE)\r\n        self.item_type = item_type\r\n        self.value = value\r\n        self.collected = False\r\n        self.color = self._get_color()\r\n\r\n    def _get_color(self) -> Tuple[int, int, int]:\r\n        color_map = {\r\n            ItemType.HEALING_POTION: GREEN,\r\n            ItemType.VISION_POTION: CYAN,\r\n            ItemType.PIT: BLACK,\r\n            ItemType.PILLAR_ABSTRACTION: RED,\r\n            ItemType.PILLAR_ENCAPSULATION: BLUE,\r\n            ItemType.PILLAR_INHERITANCE: YELLOW,\r\n            ItemType.PILLAR_POLYMORPHISM: PURPLE,\r\n            ItemType.ENTRANCE: WHITE,\r\n            ItemType.EXIT: ORANGE\r\n        }\r\n        return color_map.get(self.item_type, WHITE)\r\n\r\n    def update(self):\r\n        pass\r\n\r\n    def render(self, surface: pygame.Surface, camera_x: int = 0):\r\n        if not self.collected:\r\n            pygame.draw.rect(surface, self.color,\r\n                             (self.x - camera_x, self.y, self.width, self.height))\r\n            # Add item type indicator\r\n            font = pygame.font.Font(None, 24)\r\n            text = font.render(self.item_type.value[0].upper(), True, WHITE)\r\n            text_rect = text.get_rect(center=(self.x - camera_x + self.width // 2,\r\n                                              self.y + self.height // 2))\r\n            surface.blit(text, text_rect)\r\n\r\n\r\nclass Platform(GameObject):\r\n    \"\"\"Platform/tile object\"\"\"\r\n\r\n    def __init__(self, x: int, y: int):\r\n        super().__init__(x, y, TILE_SIZE, TILE_SIZE)\r\n        self.color = (139, 69, 19)  # Brown color\r\n\r\n    def update(self):\r\n        pass\r\n\r\n    def render(self, surface: pygame.Surface, camera_x: int = 0):\r\n        pygame.draw.rect(surface, self.color,\r\n                         (self.x - camera_x, self.y, self.width, self.height))\r\n        pygame.draw.rect(surface, BLACK,\r\n                         (self.x - camera_x, self.y, self.width, self.height), 2)\r\n\r\n\r\nclass Player(GameObject):\r\n    \"\"\"Player character\"\"\"\r\n\r\n    def __init__(self, x: int, y: int):\r\n        super().__init__(x, y, TILE_SIZE, TILE_SIZE)\r\n        self.vel_x = 0\r\n        self.vel_y = 0\r\n        self.on_ground = False\r\n        self.health = 100\r\n        self.max_health = 100\r\n        self.inventory = []\r\n        self.pillars_collected = []\r\n        self.has_vision = False\r\n        self.vision_timer = 0\r\n\r\n    def update(self):\r\n        # Handle input\r\n        keys = pygame.key.get_pressed()\r\n        self.vel_x = 0\r\n\r\n        if keys[pygame.K_LEFT] or keys[pygame.K_a]:\r\n            self.vel_x = -PLAYER_SPEED\r\n        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:\r\n            self.vel_x = PLAYER_SPEED\r\n        if (keys[pygame.K_SPACE] or keys[pygame.K_UP] or keys[pygame.K_w]) and self.on_ground:\r\n            self.vel_y = JUMP_FORCE\r\n            self.on_ground = False\r\n\r\n        # Apply gravity\r\n        if not self.on_ground:\r\n            self.vel_y += GRAVITY\r\n\r\n        # Update position\r\n        self.x += self.vel_x\r\n        self.y += self.vel_y\r\n\r\n        # Update rect after position change\r\n        self.rect.x = self.x\r\n        self.rect.y = self.y\r\n\r\n        # Update vision timer\r\n        if self.vision_timer > 0:\r\n            self.vision_timer -= 1\r\n            if self.vision_timer <= 0:\r\n                self.has_vision = False\r\n\r\n    def render(self, surface: pygame.Surface, camera_x: int = 0):\r\n        pygame.draw.rect(surface, BLUE,\r\n                         (self.x - camera_x, self.y, self.width, self.height))\r\n        pygame.draw.rect(surface, WHITE,\r\n                         (self.x - camera_x, self.y, self.width, self.height), 2)\r\n\r\n    def collect_item(self, item: Item):\r\n        \"\"\"Handle item collection\"\"\"\r\n        if item.item_type == ItemType.HEALING_POTION:\r\n            self.health = min(self.max_health, self.health + item.value)\r\n        elif item.item_type == ItemType.VISION_POTION:\r\n            self.has_vision = True\r\n            self.vision_timer = 600  # 10 seconds at 60 FPS\r\n        elif item.item_type in [ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,\r\n                                ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM]:\r\n            if item.item_type not in self.pillars_collected:\r\n                self.pillars_collected.append(item.item_type)\r\n        elif item.item_type == ItemType.PIT:\r\n            self.health = max(0, self.health - item.value)\r\n\r\n        item.collected = True\r\n        self.inventory.append(item)\r\n\r\n\r\nclass Room:\r\n    \"\"\"Room class with proper encapsulation - contains platforms, items, and room logic\"\"\"\r\n\r\n    def __init__(self, room_id: int, width: int = SCREEN_WIDTH * 2, height: int = SCREEN_HEIGHT):\r\n        self.__room_id = room_id\r\n        self.__width = width\r\n        self.__height = height\r\n        self.__platforms: List[Platform] = []\r\n        self.__items: List[Item] = []\r\n        self.__doors: Dict[Direction, bool] = {\r\n            Direction.NORTH: False,\r\n            Direction.SOUTH: False,\r\n            Direction.EAST: False,\r\n            Direction.WEST: False\r\n        }\r\n        self.__room_type = None\r\n        self.__background_image = None\r\n        self.__background_color = (50, 50, 100)  # Dark blue background fallback\r\n\r\n        # Load background image\r\n        self.__load_background()\r\n\r\n        # Generate room content\r\n        self.__generate_room_content()\r\n\r\n    def __load_background(self):\r\n        \"\"\"Load background image from assets folder\"\"\"\r\n        try:\r\n            background_path = os.path.join(\"assets\", \"background.png\")\r\n            if os.path.exists(background_path):\r\n                self.__background_image = pygame.image.load(background_path)\r\n                # Scale background to fit room dimensions\r\n                self.__background_image = pygame.transform.scale(self.__background_image, (self.__width, self.__height))\r\n            else:\r\n                print(f\"Background image not found at {background_path}\")\r\n        except Exception as e:\r\n            print(f\"Error loading background image: {e}\")\r\n            self.__background_image = None\r\n\r\n    # Private methods for encapsulation\r\n    def __generate_room_content(self):\r\n        \"\"\"Generate platforms and items for the room\"\"\"\r\n        # Generate platforms (basic floor and some floating platforms)\r\n        self.__generate_platforms()\r\n\r\n        # Determine room type and generate items\r\n        self.__determine_room_type()\r\n        self.__generate_items()\r\n\r\n        # Generate doors\r\n        self.__generate_doors()\r\n\r\n    def __generate_platforms(self):\r\n        \"\"\"Generate platforms for the room using TMX data or fallback\"\"\"\r\n        try:\r\n            # Try to load platforms from TMX file\r\n            tmx_path = os.path.join(\"assets\", \"platforms.tmx\")\r\n            if os.path.exists(tmx_path):\r\n                platform_positions = TileMapLoader.load_tmx(tmx_path)\r\n                for x, y in platform_positions:\r\n                    # Only add platforms within room bounds\r\n                    if x < self.__width and y < self.__height:\r\n                        self.__platforms.append(Platform(x, y))\r\n            else:\r\n                print(f\"TMX file not found at {tmx_path}, using fallback generation\")\r\n                platform_positions = TileMapLoader._generate_fallback_platforms()\r\n                for x, y in platform_positions:\r\n                    if x < self.__width and y < self.__height:\r\n                        self.__platforms.append(Platform(x, y))\r\n        except Exception as e:\r\n            print(f\"Error loading platforms: {e}\")\r\n            # Fallback platform generation\r\n            platform_positions = TileMapLoader._generate_fallback_platforms()\r\n            for x, y in platform_positions:\r\n                if x < self.__width and y < self.__height:\r\n                    self.__platforms.append(Platform(x, y))\r\n\r\n    def __determine_room_type(self):\r\n        \"\"\"Determine what type of room this is\"\"\"\r\n        # Special rooms (entrance, exit, pillar rooms)\r\n        special_chance = random.random()\r\n        if special_chance < 0.05:  # 5% chance for entrance\r\n            self.__room_type = ItemType.ENTRANCE\r\n        elif special_chance < 0.1:  # 5% chance for exit\r\n            self.__room_type = ItemType.EXIT\r\n        elif special_chance < 0.3:  # 20% chance for pillar room\r\n            pillars = [ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,\r\n                       ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM]\r\n            self.__room_type = random.choice(pillars)\r\n\r\n    def __generate_items(self):\r\n        \"\"\"Generate items based on room type and random chance\"\"\"\r\n        if self.__room_type == ItemType.ENTRANCE:\r\n            # Entrance room - only entrance marker, nothing else\r\n            x = self.__width // 2\r\n            y = self.__height // 2\r\n            self.__items.append(Item(x, y, ItemType.ENTRANCE))\r\n            return\r\n\r\n        if self.__room_type == ItemType.EXIT:\r\n            # Exit room - only exit marker, nothing else\r\n            x = self.__width // 2\r\n            y = self.__height // 2\r\n            self.__items.append(Item(x, y, ItemType.EXIT))\r\n            return\r\n\r\n        if self.__room_type in [ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,\r\n                                ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM]:\r\n            # Pillar room - only the specific pillar\r\n            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)\r\n            y = random.randint(TILE_SIZE, self.__height - TILE_SIZE * 2)\r\n            self.__items.append(Item(x, y, self.__room_type))\r\n            return\r\n\r\n        # Regular room - 10% chance for each item type\r\n        if random.random() < 0.1:  # Healing potion\r\n            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)\r\n            y = random.randint(TILE_SIZE, self.__height - TILE_SIZE * 2)\r\n            healing_value = random.randint(5, 15)\r\n            self.__items.append(Item(x, y, ItemType.HEALING_POTION, healing_value))\r\n\r\n        if random.random() < 0.1:  # Vision potion\r\n            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)\r\n            y = random.randint(TILE_SIZE, self.__height - TILE_SIZE * 2)\r\n            self.__items.append(Item(x, y, ItemType.VISION_POTION))\r\n\r\n        if random.random() < 0.1:  # Pit\r\n            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)\r\n            y = self.__height - TILE_SIZE  # Pits are on the ground\r\n            pit_damage = random.randint(1, 20)\r\n            self.__items.append(Item(x, y, ItemType.PIT, pit_damage))\r\n\r\n    def __generate_doors(self):\r\n        \"\"\"Generate doors for the room\"\"\"\r\n        # Random chance for each door\r\n        for direction in Direction:\r\n            self.__doors[direction] = random.random() < 0.7  # 70% chance for each door\r\n\r\n    # Public interface methods (proper encapsulation)\r\n    def get_room_id(self) -> int:\r\n        return self.__room_id\r\n\r\n    def get_platforms(self) -> List[Platform]:\r\n        return self.__platforms.copy()  # Return copy to prevent external modification\r\n\r\n    def get_items(self) -> List[Item]:\r\n        return [item for item in self.__items if not item.collected]\r\n\r\n    def get_all_items(self) -> List[Item]:\r\n        return self.__items.copy()\r\n\r\n    def has_door(self, direction: Direction) -> bool:\r\n        return self.__doors[direction]\r\n\r\n    def get_room_type(self) -> Optional[ItemType]:\r\n        return self.__room_type\r\n\r\n    def get_dimensions(self) -> Tuple[int, int]:\r\n        return (self.__width, self.__height)\r\n\r\n    def update(self):\r\n        \"\"\"Update room state\"\"\"\r\n        for item in self.__items:\r\n            item.update()\r\n        for platform in self.__platforms:\r\n            platform.update()\r\n\r\n    def render(self, surface: pygame.Surface, camera_x: int = 0):\r\n        \"\"\"Render the room\"\"\"\r\n        # Fill background\r\n        if self.__background_image:\r\n            # Render tiled background\r\n            bg_width = self.__background_image.get_width()\r\n            bg_height = self.__background_image.get_height()\r\n\r\n            # Calculate how many times to tile the background\r\n            start_x = int(camera_x // bg_width) * bg_width\r\n            end_x = start_x + SCREEN_WIDTH + bg_width\r\n\r\n            for x in range(start_x, end_x, bg_width):\r\n                for y in range(0, self.__height, bg_height):\r\n                    surface.blit(self.__background_image, (x - camera_x, y))\r\n        else:\r\n            surface.fill(self.__background_color)\r\n\r\n        # Render platforms\r\n        for platform in self.__platforms:\r\n            platform.render(surface, camera_x)\r\n\r\n        # Render items\r\n        for item in self.__items:\r\n            item.render(surface, camera_x)\r\n\r\n        # Render door indicators\r\n        self.__render_doors(surface)\r\n\r\n    def __render_doors(self, surface: pygame.Surface):\r\n        \"\"\"Render door indicators\"\"\"\r\n        font = pygame.font.Font(None, 36)\r\n\r\n        if self.__doors[Direction.NORTH]:\r\n            text = font.render(\"↑\", True, WHITE)\r\n            surface.blit(text, (self.__width // 2 - 10, 10))\r\n\r\n        if self.__doors[Direction.SOUTH]:\r\n            text = font.render(\"↓\", True, WHITE)\r\n            surface.blit(text, (self.__width // 2 - 10, self.__height - 40))\r\n\r\n        if self.__doors[Direction.EAST]:\r\n            text = font.render(\"→\", True, WHITE)\r\n            surface.blit(text, (self.__width - 40, self.__height // 2 - 10))\r\n\r\n        if self.__doors[Direction.WEST]:\r\n            text = font.render(\"←\", True, WHITE)\r\n            surface.blit(text, (10, self.__height // 2 - 10))\r\n\r\n    def check_item_collisions(self, player: Player) -> List[Item]:\r\n        \"\"\"Check for collisions between player and items\"\"\"\r\n        collected_items = []\r\n        for item in self.__items:\r\n            if not item.collected and player.rect.colliderect(item.rect):\r\n                collected_items.append(item)\r\n        return collected_items\r\n\r\n    def check_platform_collisions(self, player: Player):\r\n        \"\"\"Handle platform collisions with improved collision detection\"\"\"\r\n        player.on_ground = False\r\n\r\n        for platform in self.__platforms:\r\n            if player.rect.colliderect(platform.rect):\r\n                # Calculate overlap\r\n                overlap_x = min(player.rect.right - platform.rect.left,\r\n                                platform.rect.right - player.rect.left)\r\n                overlap_y = min(player.rect.bottom - platform.rect.top,\r\n                                platform.rect.bottom - player.rect.top)\r\n\r\n                # Resolve collision based on smallest overlap\r\n                if overlap_x < overlap_y:\r\n                    # Horizontal collision\r\n                    if player.rect.centerx < platform.rect.centerx:\r\n                        # Player is to the left of platform\r\n                        player.rect.right = platform.rect.left\r\n                        player.x = player.rect.x\r\n                    else:\r\n                        # Player is to the right of platform\r\n                        player.rect.left = platform.rect.right\r\n                        player.x = player.rect.x\r\n                else:\r\n                    # Vertical collision\r\n                    if player.rect.centery < platform.rect.centery:\r\n                        # Player is above platform (landing on top)\r\n                        player.rect.bottom = platform.rect.top\r\n                        player.y = player.rect.y\r\n                        player.vel_y = 0\r\n                        player.on_ground = True\r\n                    else:\r\n                        # Player is below platform (hitting from below)\r\n                        player.rect.top = platform.rect.bottom\r\n                        player.y = player.rect.y\r\n                        player.vel_y = 0\r\n\r\n    def __str__(self) -> str:\r\n        \"\"\"String representation of the room\"\"\"\r\n        room_content = \"Empty\"\r\n        if self.__room_type:\r\n            room_content = self.__room_type.value.title()\r\n        elif len(self.__items) > 1:\r\n            room_content = \"Multiple Items\"\r\n        elif len(self.__items) == 1:\r\n            room_content = self.__items[0].item_type.value.title()\r\n\r\n        doors_str = \"\"\r\n        for direction, has_door in self.__doors.items():\r\n            if has_door:\r\n                doors_str += f\"{direction.value[0].upper()} \"\r\n\r\n        return f\"Room {self.__room_id}: {room_content} | Doors: {doors_str.strip()}\"\r\n\r\n\r\n# CONTROLLER CLASS\r\n\r\nclass GameController:\r\n    \"\"\"Game controller - handles game logic and coordinates between model and view\"\"\"\r\n\r\n    def __init__(self):\r\n        self.current_room = Room(1)\r\n        self.player = Player(100, 100)\r\n        self.camera_x = 0\r\n        self.game_over = False\r\n        self.victory = False\r\n        self.room_transition_timer = 0\r\n\r\n    def update(self):\r\n        \"\"\"Update game state\"\"\"\r\n        if self.game_over or self.victory:\r\n            return\r\n\r\n        # Update player\r\n        old_x = self.player.x\r\n        self.player.update()\r\n\r\n        # Update room\r\n        self.current_room.update()\r\n\r\n        # Handle collisions\r\n        self.current_room.check_platform_collisions(self.player)\r\n\r\n        # Check item collisions\r\n        collected_items = self.current_room.check_item_collisions(self.player)\r\n        for item in collected_items:\r\n            self.player.collect_item(item)\r\n\r\n        # Update camera to follow player\r\n        self.camera_x = self.player.x - SCREEN_WIDTH // 2\r\n        self.camera_x = max(0, min(self.camera_x, self.current_room.get_dimensions()[0] - SCREEN_WIDTH))\r\n\r\n        # Check for room transitions\r\n        self._check_room_transitions()\r\n\r\n        # Check win/lose conditions\r\n        self._check_game_conditions()\r\n\r\n        # Keep player in bounds\r\n        room_width, room_height = self.current_room.get_dimensions()\r\n        if self.player.x < 0:\r\n            self.player.x = 0\r\n        elif self.player.x > room_width - self.player.width:\r\n            self.player.x = room_width - self.player.width\r\n\r\n        if self.player.y > room_height:\r\n            self.player.health -= 10  # Fall damage\r\n            self.player.y = 100  # Respawn\r\n            self.player.x = 100\r\n\r\n    def _check_room_transitions(self):\r\n        \"\"\"Check if player should transition to a new room\"\"\"\r\n        room_width, room_height = self.current_room.get_dimensions()\r\n\r\n        # Check boundaries for room transitions\r\n        if (self.player.x <= 0 and self.current_room.has_door(Direction.WEST)) or \\\r\n                (self.player.x >= room_width - self.player.width and self.current_room.has_door(Direction.EAST)):\r\n            self._transition_to_new_room()\r\n\r\n    def _transition_to_new_room(self):\r\n        \"\"\"Transition to a new room\"\"\"\r\n        new_room_id = self.current_room.get_room_id() + 1\r\n        self.current_room = Room(new_room_id)\r\n\r\n        # Reset player position\r\n        if self.player.x <= 0:  # Came from west\r\n            self.player.x = self.current_room.get_dimensions()[0] - 100\r\n        else:  # Came from east\r\n            self.player.x = 100\r\n\r\n        self.player.y = 100\r\n        self.camera_x = 0\r\n\r\n    def _check_game_conditions(self):\r\n        \"\"\"Check for win/lose conditions\"\"\"\r\n        if self.player.health <= 0:\r\n            self.game_over = True\r\n\r\n        # Check if player has all pillars and reached exit\r\n        required_pillars = {ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,\r\n                            ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM}\r\n        collected_pillars = set(self.player.pillars_collected)\r\n\r\n        if required_pillars.issubset(collected_pillars):\r\n            # Check if player is at exit\r\n            for item in self.current_room.get_items():\r\n                if (item.item_type == ItemType.EXIT and\r\n                        self.player.rect.colliderect(item.rect)):\r\n                    self.victory = True\r\n\r\n    def get_game_state(self) -> Dict:\r\n        \"\"\"Get current game state for the view\"\"\"\r\n        return {\r\n            'player': self.player,\r\n            'room': self.current_room,\r\n            'camera_x': self.camera_x,\r\n            'game_over': self.game_over,\r\n            'victory': self.victory\r\n        }\r\n\r\n\r\n# VIEW CLASS\r\n\r\nclass GameView:\r\n    \"\"\"Game view - handles rendering and display\"\"\"\r\n\r\n    def __init__(self):\r\n        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))\r\n        pygame.display.set_caption(\"Pillars of OO Platformer\")\r\n        self.clock = pygame.time.Clock()\r\n        self.font = pygame.font.Font(None, 36)\r\n        self.small_font = pygame.font.Font(None, 24)\r\n\r\n    def render(self, game_state: Dict):\r\n        \"\"\"Render the current game state\"\"\"\r\n        player = game_state['player']\r\n        room = game_state['room']\r\n        camera_x = game_state['camera_x']\r\n\r\n        # Clear screen\r\n        self.screen.fill(BLACK)\r\n\r\n        # Render room\r\n        room.render(self.screen, camera_x)\r\n\r\n        # Render player\r\n        player.render(self.screen, camera_x)\r\n\r\n        # Render UI\r\n        self._render_ui(player)\r\n\r\n        # Render game over/victory screens\r\n        if game_state['game_over']:\r\n            self._render_game_over()\r\n        elif game_state['victory']:\r\n            self._render_victory()\r\n\r\n        pygame.display.flip()\r\n\r\n    def _render_ui(self, player: Player):\r\n        \"\"\"Render user interface elements\"\"\"\r\n        # Health bar\r\n        health_width = 200\r\n        health_height = 20\r\n        health_percent = player.health / player.max_health\r\n\r\n        pygame.draw.rect(self.screen, RED, (10, 10, health_width, health_height))\r\n        pygame.draw.rect(self.screen, GREEN, (10, 10, health_width * health_percent, health_height))\r\n        pygame.draw.rect(self.screen, WHITE, (10, 10, health_width, health_height), 2)\r\n\r\n        health_text = self.small_font.render(f\"Health: {player.health}/{player.max_health}\", True, WHITE)\r\n        self.screen.blit(health_text, (10, 35))\r\n\r\n        # Pillars collected\r\n        pillars_text = self.small_font.render(f\"Pillars: {len(player.pillars_collected)}/4\", True, WHITE)\r\n        self.screen.blit(pillars_text, (10, 60))\r\n\r\n        # List collected pillars\r\n        y_offset = 85\r\n        for i, pillar in enumerate(player.pillars_collected):\r\n            pillar_text = self.small_font.render(f\"• {pillar.value.title()}\", True, WHITE)\r\n            self.screen.blit(pillar_text, (10, y_offset + i * 20))\r\n\r\n        # Vision potion indicator\r\n        if player.has_vision:\r\n            vision_text = self.small_font.render(\"VISION ACTIVE\", True, CYAN)\r\n            self.screen.blit(vision_text, (SCREEN_WIDTH - 150, 10))\r\n\r\n        # Instructions\r\n        instructions = [\r\n            \"Arrow Keys/WASD: Move\",\r\n            \"Space/Up: Jump\",\r\n            \"Collect all 4 Pillars of OO\",\r\n            \"Find the Exit to win!\"\r\n        ]\r\n\r\n        for i, instruction in enumerate(instructions):\r\n            text = self.small_font.render(instruction, True, WHITE)\r\n            self.screen.blit(text, (SCREEN_WIDTH - 250, SCREEN_HEIGHT - 100 + i * 20))\r\n\r\n    def _render_game_over(self):\r\n        \"\"\"Render game over screen\"\"\"\r\n        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))\r\n        overlay.set_alpha(128)\r\n        overlay.fill(BLACK)\r\n        self.screen.blit(overlay, (0, 0))\r\n\r\n        game_over_text = self.font.render(\"GAME OVER\", True, RED)\r\n        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))\r\n        self.screen.blit(game_over_text, text_rect)\r\n\r\n        restart_text = self.small_font.render(\"Press R to restart or ESC to quit\", True, WHITE)\r\n        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))\r\n        self.screen.blit(restart_text, restart_rect)\r\n\r\n    def _render_victory(self):\r\n        \"\"\"Render victory screen\"\"\"\r\n        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))\r\n        overlay.set_alpha(128)\r\n        overlay.fill(BLACK)\r\n        self.screen.blit(overlay, (0, 0))\r\n\r\n        victory_text = self.font.render(\"VICTORY!\", True, GREEN)\r\n        text_rect = victory_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))\r\n        self.screen.blit(victory_text, text_rect)\r\n\r\n        success_text = self.small_font.render(\"You collected all Pillars of OO!\", True, WHITE)\r\n        success_rect = success_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30))\r\n        self.screen.blit(success_text, success_rect)\r\n\r\n        restart_text = self.small_font.render(\"Press R to restart or ESC to quit\", True, WHITE)\r\n        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60))\r\n        self.screen.blit(restart_text, restart_rect)\r\n\r\n    def get_clock(self):\r\n        return self.clock\r\n\r\n\r\n# MAIN GAME CLASS\r\n\r\nclass PlatformerGame:\r\n    \"\"\"Main game class that coordinates MVC components\"\"\"\r\n\r\n    def __init__(self):\r\n        self.controller = GameController()\r\n        self.view = GameView()\r\n        self.running = True\r\n\r\n    def handle_events(self):\r\n        \"\"\"Handle pygame events\"\"\"\r\n        for event in pygame.event.get():\r\n            if event.type == pygame.QUIT:\r\n                self.running = False\r\n            elif event.type == pygame.KEYDOWN:\r\n                if event.key == pygame.K_ESCAPE:\r\n                    self.running = False\r\n                elif event.key == pygame.K_r:\r\n                    # Restart game\r\n                    self.controller = GameController()\r\n\r\n    def run(self):\r\n        \"\"\"Main game loop\"\"\"\r\n        while self.running:\r\n            self.handle_events()\r\n            self.controller.update()\r\n            game_state = self.controller.get_game_state()\r\n            self.view.render(game_state)\r\n            self.view.get_clock().tick(60)  # 60 FPS\r\n\r\n        pygame.quit()\r\n\r\n\r\n# Run the game\r\nif __name__ == \"__main__\":\r\n    game = PlatformerGame()\r\n    game.run()
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/Model/main.py b/src/Model/main.py
+--- a/src/Model/main.py	(revision e8e96731f5afce67432fddc24ae1385c4235317b)
++++ b/src/Model/main.py	(date 1748299413255)
+@@ -1,800 +1,61 @@
++"""
++main.py - Entry point for the dungeon game
++"""
+ import pygame
+-import random
+-import json
+-import xml.etree.ElementTree as ET
+-import os
+-from enum import Enum
+-from abc import ABC, abstractmethod
+-from typing import List, Tuple, Optional, Dict
++import sys
++from Game import Game
+ 
+-# Initialize Pygame
+-pygame.init()
++
++def main():
++    """Main entry point for the game"""
++    # Initialize Pygame
++    pygame.init()
+ 
+-# Constants
+-SCREEN_WIDTH = 1200
+-SCREEN_HEIGHT = 800
+-TILE_SIZE = 32
+-GRAVITY = 0.8
+-JUMP_FORCE = -15
+-PLAYER_SPEED = 5
+-
+-# Colors
+-BLACK = (0, 0, 0)
+-WHITE = (255, 255, 255)
+-RED = (255, 0, 0)
+-GREEN = (0, 255, 0)
+-BLUE = (0, 0, 255)
+-YELLOW = (255, 255, 0)
+-PURPLE = (128, 0, 128)
+-ORANGE = (255, 165, 0)
+-CYAN = (0, 255, 255)
+-
+-
+-class ItemType(Enum):
+-    HEALING_POTION = "healing"
+-    VISION_POTION = "vision"
+-    PIT = "pit"
+-    PILLAR_ABSTRACTION = "abstraction"
+-    PILLAR_ENCAPSULATION = "encapsulation"
+-    PILLAR_INHERITANCE = "inheritance"
+-    PILLAR_POLYMORPHISM = "polymorphism"
+-    ENTRANCE = "entrance"
+-    EXIT = "exit"
+-
+-
+-class Direction(Enum):
+-    NORTH = "north"
+-    SOUTH = "south"
+-    EAST = "east"
+-    WEST = "west"
+-
+-
+-class TileMapLoader:
+-    """Utility class to load TMX tile maps and extract platform data"""
+-
+-    @staticmethod
+-    def load_tmx(file_path: str) -> List[Tuple[int, int]]:
+-        """Load platform positions from TMX file"""
+-        platforms = []
+-        try:
+-            tree = ET.parse(file_path)
+-            root = tree.getroot()
+-
+-            # Get map dimensions
+-            map_width = int(root.get('width', 0))
+-            map_height = int(root.get('height', 0))
+-            tile_width = int(root.get('tilewidth', TILE_SIZE))
+-            tile_height = int(root.get('tileheight', TILE_SIZE))
+-
+-            # Find layer with platform data
+-            for layer in root.findall('layer'):
+-                data_element = layer.find('data')
+-                if data_element is not None:
+-                    # Parse CSV data
+-                    csv_data = data_element.text.strip().replace('\n', '').replace(' ', '')
+-                    tile_ids = [int(x) for x in csv_data.split(',') if x]
+-
+-                    # Convert tile IDs to platform positions
+-                    for i, tile_id in enumerate(tile_ids):
+-                        if tile_id > 0:  # Non-zero tile ID means there's a platform
+-                            x = (i % map_width) * tile_width
+-                            y = (i // map_width) * tile_height
+-                            platforms.append((x, y))
+-
+-        except Exception as e:
+-            print(f"Error loading TMX file: {e}")
+-            # Fallback to procedural generation if TMX loading fails
+-            return TileMapLoader._generate_fallback_platforms()
+-
+-        return platforms
+-
+-    @staticmethod
+-    def _generate_fallback_platforms() -> List[Tuple[int, int]]:
+-        """Generate fallback platforms if TMX loading fails"""
+-        platforms = []
+-
+-        # Generate floor platforms
+-        for x in range(0, SCREEN_WIDTH * 2, TILE_SIZE):
+-            if random.random() > 0.2:  # Some gaps in the floor
+-                platforms.append((x, SCREEN_HEIGHT - TILE_SIZE))
+-
+-        # Generate floating platforms
+-        for _ in range(random.randint(5, 12)):
+-            x = random.randint(0, SCREEN_WIDTH * 2 - TILE_SIZE)
+-            y = random.randint(TILE_SIZE * 3, SCREEN_HEIGHT - TILE_SIZE * 3)
+-            # Create platform clusters
+-            cluster_size = random.randint(1, 4)
+-            for i in range(cluster_size):
+-                if x + i * TILE_SIZE < SCREEN_WIDTH * 2:
+-                    platforms.append((x + i * TILE_SIZE, y))
+-
+-        return platforms
+-
+-
+-# MODEL CLASSES
+-
+-class GameObject(ABC):
+-    """Abstract base class for all game objects"""
+-
+-    def __init__(self, x: int, y: int, width: int, height: int):
+-        self.x = x
+-        self.y = y
+-        self.width = width
+-        self.height = height
+-        self.rect = pygame.Rect(x, y, width, height)
+-
+-    @abstractmethod
+-    def update(self):
+-        pass
+-
+-    @abstractmethod
+-    def render(self, surface: pygame.Surface, camera_x: int = 0):
+-        pass
+-
+-
+-class Item(GameObject):
+-    """Base class for all collectible items"""
+-
+-    def __init__(self, x: int, y: int, item_type: ItemType, value: int = 0):
+-        super().__init__(x, y, TILE_SIZE, TILE_SIZE)
+-        self.item_type = item_type
+-        self.value = value
+-        self.collected = False
+-        self.color = self._get_color()
+-
+-    def _get_color(self) -> Tuple[int, int, int]:
+-        color_map = {
+-            ItemType.HEALING_POTION: GREEN,
+-            ItemType.VISION_POTION: CYAN,
+-            ItemType.PIT: BLACK,
+-            ItemType.PILLAR_ABSTRACTION: RED,
+-            ItemType.PILLAR_ENCAPSULATION: BLUE,
+-            ItemType.PILLAR_INHERITANCE: YELLOW,
+-            ItemType.PILLAR_POLYMORPHISM: PURPLE,
+-            ItemType.ENTRANCE: WHITE,
+-            ItemType.EXIT: ORANGE
+-        }
+-        return color_map.get(self.item_type, WHITE)
+-
+-    def update(self):
+-        pass
+-
+-    def render(self, surface: pygame.Surface, camera_x: int = 0):
+-        if not self.collected:
+-            pygame.draw.rect(surface, self.color,
+-                             (self.x - camera_x, self.y, self.width, self.height))
+-            # Add item type indicator
+-            font = pygame.font.Font(None, 24)
+-            text = font.render(self.item_type.value[0].upper(), True, WHITE)
+-            text_rect = text.get_rect(center=(self.x - camera_x + self.width // 2,
+-                                              self.y + self.height // 2))
+-            surface.blit(text, text_rect)
+-
+-
+-class Platform(GameObject):
+-    """Platform/tile object"""
++    # Set up the display
++    screen_width = 1024
++    screen_height = 768
++    screen = pygame.display.set_mode((screen_width, screen_height))
++    pygame.display.set_caption("Dungeon Heroes")
+ 
+-    def __init__(self, x: int, y: int):
+-        super().__init__(x, y, TILE_SIZE, TILE_SIZE)
+-        self.color = (139, 69, 19)  # Brown color
++    # Create clock for controlling frame rate
++    clock = pygame.time.Clock()
++    fps = 60
+ 
+-    def update(self):
+-        pass
++    # Create the game instance
++    game = Game(screen, screen_width, screen_height)
+ 
+-    def render(self, surface: pygame.Surface, camera_x: int = 0):
+-        pygame.draw.rect(surface, self.color,
+-                         (self.x - camera_x, self.y, self.width, self.height))
+-        pygame.draw.rect(surface, BLACK,
+-                         (self.x - camera_x, self.y, self.width, self.height), 2)
++    # Game loop
++    running = True
++    dt = 0
+ 
++    while running:
++        # Handle events
++        events = pygame.event.get()
++        for event in events:
++            if event.type == pygame.QUIT:
++                running = False
+ 
+-class Player(GameObject):
+-    """Player character"""
++            # Pass events to game
++            game.handle_event(event)
+ 
+-    def __init__(self, x: int, y: int):
+-        super().__init__(x, y, TILE_SIZE, TILE_SIZE)
+-        self.vel_x = 0
+-        self.vel_y = 0
+-        self.on_ground = False
+-        self.health = 100
+-        self.max_health = 100
+-        self.inventory = []
+-        self.pillars_collected = []
+-        self.has_vision = False
+-        self.vision_timer = 0
+-
+-    def update(self):
+-        # Handle input
++        # Update game state
+         keys = pygame.key.get_pressed()
+-        self.vel_x = 0
+-
+-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+-            self.vel_x = -PLAYER_SPEED
+-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+-            self.vel_x = PLAYER_SPEED
+-        if (keys[pygame.K_SPACE] or keys[pygame.K_UP] or keys[pygame.K_w]) and self.on_ground:
+-            self.vel_y = JUMP_FORCE
+-            self.on_ground = False
+-
+-        # Apply gravity
+-        if not self.on_ground:
+-            self.vel_y += GRAVITY
+-
+-        # Update position
+-        self.x += self.vel_x
+-        self.y += self.vel_y
+-
+-        # Update rect after position change
+-        self.rect.x = self.x
+-        self.rect.y = self.y
+-
+-        # Update vision timer
+-        if self.vision_timer > 0:
+-            self.vision_timer -= 1
+-            if self.vision_timer <= 0:
+-                self.has_vision = False
+-
+-    def render(self, surface: pygame.Surface, camera_x: int = 0):
+-        pygame.draw.rect(surface, BLUE,
+-                         (self.x - camera_x, self.y, self.width, self.height))
+-        pygame.draw.rect(surface, WHITE,
+-                         (self.x - camera_x, self.y, self.width, self.height), 2)
+-
+-    def collect_item(self, item: Item):
+-        """Handle item collection"""
+-        if item.item_type == ItemType.HEALING_POTION:
+-            self.health = min(self.max_health, self.health + item.value)
+-        elif item.item_type == ItemType.VISION_POTION:
+-            self.has_vision = True
+-            self.vision_timer = 600  # 10 seconds at 60 FPS
+-        elif item.item_type in [ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,
+-                                ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM]:
+-            if item.item_type not in self.pillars_collected:
+-                self.pillars_collected.append(item.item_type)
+-        elif item.item_type == ItemType.PIT:
+-            self.health = max(0, self.health - item.value)
+-
+-        item.collected = True
+-        self.inventory.append(item)
+-
+-
+-class Room:
+-    """Room class with proper encapsulation - contains platforms, items, and room logic"""
+-
+-    def __init__(self, room_id: int, width: int = SCREEN_WIDTH * 2, height: int = SCREEN_HEIGHT):
+-        self.__room_id = room_id
+-        self.__width = width
+-        self.__height = height
+-        self.__platforms: List[Platform] = []
+-        self.__items: List[Item] = []
+-        self.__doors: Dict[Direction, bool] = {
+-            Direction.NORTH: False,
+-            Direction.SOUTH: False,
+-            Direction.EAST: False,
+-            Direction.WEST: False
+-        }
+-        self.__room_type = None
+-        self.__background_image = None
+-        self.__background_color = (50, 50, 100)  # Dark blue background fallback
+-
+-        # Load background image
+-        self.__load_background()
+-
+-        # Generate room content
+-        self.__generate_room_content()
+-
+-    def __load_background(self):
+-        """Load background image from assets folder"""
+-        try:
+-            background_path = os.path.join("assets", "background.png")
+-            if os.path.exists(background_path):
+-                self.__background_image = pygame.image.load(background_path)
+-                # Scale background to fit room dimensions
+-                self.__background_image = pygame.transform.scale(self.__background_image, (self.__width, self.__height))
+-            else:
+-                print(f"Background image not found at {background_path}")
+-        except Exception as e:
+-            print(f"Error loading background image: {e}")
+-            self.__background_image = None
+-
+-    # Private methods for encapsulation
+-    def __generate_room_content(self):
+-        """Generate platforms and items for the room"""
+-        # Generate platforms (basic floor and some floating platforms)
+-        self.__generate_platforms()
+-
+-        # Determine room type and generate items
+-        self.__determine_room_type()
+-        self.__generate_items()
+-
+-        # Generate doors
+-        self.__generate_doors()
+-
+-    def __generate_platforms(self):
+-        """Generate platforms for the room using TMX data or fallback"""
+-        try:
+-            # Try to load platforms from TMX file
+-            tmx_path = os.path.join("assets", "platforms.tmx")
+-            if os.path.exists(tmx_path):
+-                platform_positions = TileMapLoader.load_tmx(tmx_path)
+-                for x, y in platform_positions:
+-                    # Only add platforms within room bounds
+-                    if x < self.__width and y < self.__height:
+-                        self.__platforms.append(Platform(x, y))
+-            else:
+-                print(f"TMX file not found at {tmx_path}, using fallback generation")
+-                platform_positions = TileMapLoader._generate_fallback_platforms()
+-                for x, y in platform_positions:
+-                    if x < self.__width and y < self.__height:
+-                        self.__platforms.append(Platform(x, y))
+-        except Exception as e:
+-            print(f"Error loading platforms: {e}")
+-            # Fallback platform generation
+-            platform_positions = TileMapLoader._generate_fallback_platforms()
+-            for x, y in platform_positions:
+-                if x < self.__width and y < self.__height:
+-                    self.__platforms.append(Platform(x, y))
+-
+-    def __determine_room_type(self):
+-        """Determine what type of room this is"""
+-        # Special rooms (entrance, exit, pillar rooms)
+-        special_chance = random.random()
+-        if special_chance < 0.05:  # 5% chance for entrance
+-            self.__room_type = ItemType.ENTRANCE
+-        elif special_chance < 0.1:  # 5% chance for exit
+-            self.__room_type = ItemType.EXIT
+-        elif special_chance < 0.3:  # 20% chance for pillar room
+-            pillars = [ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,
+-                       ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM]
+-            self.__room_type = random.choice(pillars)
+-
+-    def __generate_items(self):
+-        """Generate items based on room type and random chance"""
+-        if self.__room_type == ItemType.ENTRANCE:
+-            # Entrance room - only entrance marker, nothing else
+-            x = self.__width // 2
+-            y = self.__height // 2
+-            self.__items.append(Item(x, y, ItemType.ENTRANCE))
+-            return
+-
+-        if self.__room_type == ItemType.EXIT:
+-            # Exit room - only exit marker, nothing else
+-            x = self.__width // 2
+-            y = self.__height // 2
+-            self.__items.append(Item(x, y, ItemType.EXIT))
+-            return
+-
+-        if self.__room_type in [ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,
+-                                ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM]:
+-            # Pillar room - only the specific pillar
+-            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)
+-            y = random.randint(TILE_SIZE, self.__height - TILE_SIZE * 2)
+-            self.__items.append(Item(x, y, self.__room_type))
+-            return
+-
+-        # Regular room - 10% chance for each item type
+-        if random.random() < 0.1:  # Healing potion
+-            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)
+-            y = random.randint(TILE_SIZE, self.__height - TILE_SIZE * 2)
+-            healing_value = random.randint(5, 15)
+-            self.__items.append(Item(x, y, ItemType.HEALING_POTION, healing_value))
+-
+-        if random.random() < 0.1:  # Vision potion
+-            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)
+-            y = random.randint(TILE_SIZE, self.__height - TILE_SIZE * 2)
+-            self.__items.append(Item(x, y, ItemType.VISION_POTION))
+-
+-        if random.random() < 0.1:  # Pit
+-            x = random.randint(TILE_SIZE, self.__width - TILE_SIZE)
+-            y = self.__height - TILE_SIZE  # Pits are on the ground
+-            pit_damage = random.randint(1, 20)
+-            self.__items.append(Item(x, y, ItemType.PIT, pit_damage))
+-
+-    def __generate_doors(self):
+-        """Generate doors for the room"""
+-        # Random chance for each door
+-        for direction in Direction:
+-            self.__doors[direction] = random.random() < 0.7  # 70% chance for each door
+-
+-    # Public interface methods (proper encapsulation)
+-    def get_room_id(self) -> int:
+-        return self.__room_id
+-
+-    def get_platforms(self) -> List[Platform]:
+-        return self.__platforms.copy()  # Return copy to prevent external modification
+-
+-    def get_items(self) -> List[Item]:
+-        return [item for item in self.__items if not item.collected]
+-
+-    def get_all_items(self) -> List[Item]:
+-        return self.__items.copy()
+-
+-    def has_door(self, direction: Direction) -> bool:
+-        return self.__doors[direction]
+-
+-    def get_room_type(self) -> Optional[ItemType]:
+-        return self.__room_type
+-
+-    def get_dimensions(self) -> Tuple[int, int]:
+-        return (self.__width, self.__height)
+-
+-    def update(self):
+-        """Update room state"""
+-        for item in self.__items:
+-            item.update()
+-        for platform in self.__platforms:
+-            platform.update()
+-
+-    def render(self, surface: pygame.Surface, camera_x: int = 0):
+-        """Render the room"""
+-        # Fill background
+-        if self.__background_image:
+-            # Render tiled background
+-            bg_width = self.__background_image.get_width()
+-            bg_height = self.__background_image.get_height()
+-
+-            # Calculate how many times to tile the background
+-            start_x = int(camera_x // bg_width) * bg_width
+-            end_x = start_x + SCREEN_WIDTH + bg_width
+-
+-            for x in range(start_x, end_x, bg_width):
+-                for y in range(0, self.__height, bg_height):
+-                    surface.blit(self.__background_image, (x - camera_x, y))
+-        else:
+-            surface.fill(self.__background_color)
+-
+-        # Render platforms
+-        for platform in self.__platforms:
+-            platform.render(surface, camera_x)
+-
+-        # Render items
+-        for item in self.__items:
+-            item.render(surface, camera_x)
+-
+-        # Render door indicators
+-        self.__render_doors(surface)
+-
+-    def __render_doors(self, surface: pygame.Surface):
+-        """Render door indicators"""
+-        font = pygame.font.Font(None, 36)
+-
+-        if self.__doors[Direction.NORTH]:
+-            text = font.render("↑", True, WHITE)
+-            surface.blit(text, (self.__width // 2 - 10, 10))
+-
+-        if self.__doors[Direction.SOUTH]:
+-            text = font.render("↓", True, WHITE)
+-            surface.blit(text, (self.__width // 2 - 10, self.__height - 40))
+-
+-        if self.__doors[Direction.EAST]:
+-            text = font.render("→", True, WHITE)
+-            surface.blit(text, (self.__width - 40, self.__height // 2 - 10))
+-
+-        if self.__doors[Direction.WEST]:
+-            text = font.render("←", True, WHITE)
+-            surface.blit(text, (10, self.__height // 2 - 10))
+-
+-    def check_item_collisions(self, player: Player) -> List[Item]:
+-        """Check for collisions between player and items"""
+-        collected_items = []
+-        for item in self.__items:
+-            if not item.collected and player.rect.colliderect(item.rect):
+-                collected_items.append(item)
+-        return collected_items
+-
+-    def check_platform_collisions(self, player: Player):
+-        """Handle platform collisions with improved collision detection"""
+-        player.on_ground = False
+-
+-        for platform in self.__platforms:
+-            if player.rect.colliderect(platform.rect):
+-                # Calculate overlap
+-                overlap_x = min(player.rect.right - platform.rect.left,
+-                                platform.rect.right - player.rect.left)
+-                overlap_y = min(player.rect.bottom - platform.rect.top,
+-                                platform.rect.bottom - player.rect.top)
+-
+-                # Resolve collision based on smallest overlap
+-                if overlap_x < overlap_y:
+-                    # Horizontal collision
+-                    if player.rect.centerx < platform.rect.centerx:
+-                        # Player is to the left of platform
+-                        player.rect.right = platform.rect.left
+-                        player.x = player.rect.x
+-                    else:
+-                        # Player is to the right of platform
+-                        player.rect.left = platform.rect.right
+-                        player.x = player.rect.x
+-                else:
+-                    # Vertical collision
+-                    if player.rect.centery < platform.rect.centery:
+-                        # Player is above platform (landing on top)
+-                        player.rect.bottom = platform.rect.top
+-                        player.y = player.rect.y
+-                        player.vel_y = 0
+-                        player.on_ground = True
+-                    else:
+-                        # Player is below platform (hitting from below)
+-                        player.rect.top = platform.rect.bottom
+-                        player.y = player.rect.y
+-                        player.vel_y = 0
+-
+-    def __str__(self) -> str:
+-        """String representation of the room"""
+-        room_content = "Empty"
+-        if self.__room_type:
+-            room_content = self.__room_type.value.title()
+-        elif len(self.__items) > 1:
+-            room_content = "Multiple Items"
+-        elif len(self.__items) == 1:
+-            room_content = self.__items[0].item_type.value.title()
+-
+-        doors_str = ""
+-        for direction, has_door in self.__doors.items():
+-            if has_door:
+-                doors_str += f"{direction.value[0].upper()} "
+-
+-        return f"Room {self.__room_id}: {room_content} | Doors: {doors_str.strip()}"
+-
+-
+-# CONTROLLER CLASS
+-
+-class GameController:
+-    """Game controller - handles game logic and coordinates between model and view"""
+-
+-    def __init__(self):
+-        self.current_room = Room(1)
+-        self.player = Player(100, 100)
+-        self.camera_x = 0
+-        self.game_over = False
+-        self.victory = False
+-        self.room_transition_timer = 0
+-
+-    def update(self):
+-        """Update game state"""
+-        if self.game_over or self.victory:
+-            return
+-
+-        # Update player
+-        old_x = self.player.x
+-        self.player.update()
+-
+-        # Update room
+-        self.current_room.update()
+-
+-        # Handle collisions
+-        self.current_room.check_platform_collisions(self.player)
+-
+-        # Check item collisions
+-        collected_items = self.current_room.check_item_collisions(self.player)
+-        for item in collected_items:
+-            self.player.collect_item(item)
+-
+-        # Update camera to follow player
+-        self.camera_x = self.player.x - SCREEN_WIDTH // 2
+-        self.camera_x = max(0, min(self.camera_x, self.current_room.get_dimensions()[0] - SCREEN_WIDTH))
+-
+-        # Check for room transitions
+-        self._check_room_transitions()
+-
+-        # Check win/lose conditions
+-        self._check_game_conditions()
+-
+-        # Keep player in bounds
+-        room_width, room_height = self.current_room.get_dimensions()
+-        if self.player.x < 0:
+-            self.player.x = 0
+-        elif self.player.x > room_width - self.player.width:
+-            self.player.x = room_width - self.player.width
+-
+-        if self.player.y > room_height:
+-            self.player.health -= 10  # Fall damage
+-            self.player.y = 100  # Respawn
+-            self.player.x = 100
+-
+-    def _check_room_transitions(self):
+-        """Check if player should transition to a new room"""
+-        room_width, room_height = self.current_room.get_dimensions()
++        game.update(dt, keys)
+ 
+-        # Check boundaries for room transitions
+-        if (self.player.x <= 0 and self.current_room.has_door(Direction.WEST)) or \
+-                (self.player.x >= room_width - self.player.width and self.current_room.has_door(Direction.EAST)):
+-            self._transition_to_new_room()
++        # Draw everything
++        game.draw()
+ 
+-    def _transition_to_new_room(self):
+-        """Transition to a new room"""
+-        new_room_id = self.current_room.get_room_id() + 1
+-        self.current_room = Room(new_room_id)
+-
+-        # Reset player position
+-        if self.player.x <= 0:  # Came from west
+-            self.player.x = self.current_room.get_dimensions()[0] - 100
+-        else:  # Came from east
+-            self.player.x = 100
+-
+-        self.player.y = 100
+-        self.camera_x = 0
+-
+-    def _check_game_conditions(self):
+-        """Check for win/lose conditions"""
+-        if self.player.health <= 0:
+-            self.game_over = True
+-
+-        # Check if player has all pillars and reached exit
+-        required_pillars = {ItemType.PILLAR_ABSTRACTION, ItemType.PILLAR_ENCAPSULATION,
+-                            ItemType.PILLAR_INHERITANCE, ItemType.PILLAR_POLYMORPHISM}
+-        collected_pillars = set(self.player.pillars_collected)
+-
+-        if required_pillars.issubset(collected_pillars):
+-            # Check if player is at exit
+-            for item in self.current_room.get_items():
+-                if (item.item_type == ItemType.EXIT and
+-                        self.player.rect.colliderect(item.rect)):
+-                    self.victory = True
+-
+-    def get_game_state(self) -> Dict:
+-        """Get current game state for the view"""
+-        return {
+-            'player': self.player,
+-            'room': self.current_room,
+-            'camera_x': self.camera_x,
+-            'game_over': self.game_over,
+-            'victory': self.victory
+-        }
+-
+-
+-# VIEW CLASS
+-
+-class GameView:
+-    """Game view - handles rendering and display"""
+-
+-    def __init__(self):
+-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+-        pygame.display.set_caption("Pillars of OO Platformer")
+-        self.clock = pygame.time.Clock()
+-        self.font = pygame.font.Font(None, 36)
+-        self.small_font = pygame.font.Font(None, 24)
+-
+-    def render(self, game_state: Dict):
+-        """Render the current game state"""
+-        player = game_state['player']
+-        room = game_state['room']
+-        camera_x = game_state['camera_x']
+-
+-        # Clear screen
+-        self.screen.fill(BLACK)
+-
+-        # Render room
+-        room.render(self.screen, camera_x)
+-
+-        # Render player
+-        player.render(self.screen, camera_x)
+-
+-        # Render UI
+-        self._render_ui(player)
+-
+-        # Render game over/victory screens
+-        if game_state['game_over']:
+-            self._render_game_over()
+-        elif game_state['victory']:
+-            self._render_victory()
+-
++        # Update display
+         pygame.display.flip()
+ 
+-    def _render_ui(self, player: Player):
+-        """Render user interface elements"""
+-        # Health bar
+-        health_width = 200
+-        health_height = 20
+-        health_percent = player.health / player.max_health
+-
+-        pygame.draw.rect(self.screen, RED, (10, 10, health_width, health_height))
+-        pygame.draw.rect(self.screen, GREEN, (10, 10, health_width * health_percent, health_height))
+-        pygame.draw.rect(self.screen, WHITE, (10, 10, health_width, health_height), 2)
+-
+-        health_text = self.small_font.render(f"Health: {player.health}/{player.max_health}", True, WHITE)
+-        self.screen.blit(health_text, (10, 35))
+-
+-        # Pillars collected
+-        pillars_text = self.small_font.render(f"Pillars: {len(player.pillars_collected)}/4", True, WHITE)
+-        self.screen.blit(pillars_text, (10, 60))
+-
+-        # List collected pillars
+-        y_offset = 85
+-        for i, pillar in enumerate(player.pillars_collected):
+-            pillar_text = self.small_font.render(f"• {pillar.value.title()}", True, WHITE)
+-            self.screen.blit(pillar_text, (10, y_offset + i * 20))
++        # Control frame rate
++        dt = clock.tick(fps) / 1000.0  # Convert to seconds
+ 
+-        # Vision potion indicator
+-        if player.has_vision:
+-            vision_text = self.small_font.render("VISION ACTIVE", True, CYAN)
+-            self.screen.blit(vision_text, (SCREEN_WIDTH - 150, 10))
+-
+-        # Instructions
+-        instructions = [
+-            "Arrow Keys/WASD: Move",
+-            "Space/Up: Jump",
+-            "Collect all 4 Pillars of OO",
+-            "Find the Exit to win!"
+-        ]
+-
+-        for i, instruction in enumerate(instructions):
+-            text = self.small_font.render(instruction, True, WHITE)
+-            self.screen.blit(text, (SCREEN_WIDTH - 250, SCREEN_HEIGHT - 100 + i * 20))
+-
+-    def _render_game_over(self):
+-        """Render game over screen"""
+-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+-        overlay.set_alpha(128)
+-        overlay.fill(BLACK)
+-        self.screen.blit(overlay, (0, 0))
+-
+-        game_over_text = self.font.render("GAME OVER", True, RED)
+-        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+-        self.screen.blit(game_over_text, text_rect)
+-
+-        restart_text = self.small_font.render("Press R to restart or ESC to quit", True, WHITE)
+-        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+-        self.screen.blit(restart_text, restart_rect)
+-
+-    def _render_victory(self):
+-        """Render victory screen"""
+-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+-        overlay.set_alpha(128)
+-        overlay.fill(BLACK)
+-        self.screen.blit(overlay, (0, 0))
+-
+-        victory_text = self.font.render("VICTORY!", True, GREEN)
+-        text_rect = victory_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+-        self.screen.blit(victory_text, text_rect)
+-
+-        success_text = self.small_font.render("You collected all Pillars of OO!", True, WHITE)
+-        success_rect = success_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30))
+-        self.screen.blit(success_text, success_rect)
+-
+-        restart_text = self.small_font.render("Press R to restart or ESC to quit", True, WHITE)
+-        restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60))
+-        self.screen.blit(restart_text, restart_rect)
+-
+-    def get_clock(self):
+-        return self.clock
+-
+-
+-# MAIN GAME CLASS
+-
+-class PlatformerGame:
+-    """Main game class that coordinates MVC components"""
+-
+-    def __init__(self):
+-        self.controller = GameController()
+-        self.view = GameView()
+-        self.running = True
+-
+-    def handle_events(self):
+-        """Handle pygame events"""
+-        for event in pygame.event.get():
+-            if event.type == pygame.QUIT:
+-                self.running = False
+-            elif event.type == pygame.KEYDOWN:
+-                if event.key == pygame.K_ESCAPE:
+-                    self.running = False
+-                elif event.key == pygame.K_r:
+-                    # Restart game
+-                    self.controller = GameController()
+-
+-    def run(self):
+-        """Main game loop"""
+-        while self.running:
+-            self.handle_events()
+-            self.controller.update()
+-            game_state = self.controller.get_game_state()
+-            self.view.render(game_state)
+-            self.view.get_clock().tick(60)  # 60 FPS
+-
+-        pygame.quit()
++    # Quit
++    pygame.quit()
++    sys.exit()
+ 
+ 
+-# Run the game
+ if __name__ == "__main__":
+-    game = PlatformerGame()
+-    game.run()
+\ No newline at end of file
++    main()
++
