@@ -1,95 +1,61 @@
-import pygame
-import json
+import random
+import pytmx
 
 
 class Room:
-    def __init__(self, room_file):
-        """
-        Initialize a game room from JSON data
-        Args:
-            room_file: Path to JSON file containing room layout
-        """
-        with open(room_file) as f:
-            self.data = json.load(f)
+    def __init__(self, tmx_file, background_file):
+        # Define screen dimensions
+        self.width = 800  # Default screen width
+        self.height = 600  # Default screen height
+        self.tmx_file = tmx_file
 
-        # Room dimensions
-        self.width = self.data['width'] * self.data['tile_size']
-        self.height = self.data['height'] * self.data['tile_size']
+        # Construct proper path to assets
+        assets_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets')
+        self.background_path = os.path.join(assets_path, background_file)
+        self.platforms_path = os.path.join(assets_path, tmx_file)
 
-        # Tile setup
-        self.tile_size = self.data['tile_size']
-        self.tiles = self.data['layout']
+        try:
+            # Load and scale background
+            self.background = pygame.image.load(self.background_path).convert()
+            self.background = pygame.transform.scale(self.background, (self.width, self.height))
 
-        # Collision objects
-        self.walls = []
-        self.platforms = []
-        self._process_tiles()
+            # Load TMX file for platforms
+            self.tmx_data = pytmx.load_pygame(self.platforms_path)
+            self.platforms = self.load_platforms()
+        except Exception as e:
+            print(f"Error loading assets: {e}")
+            self.background = pygame.Surface((self.width, self.height))
+            self.background.fill((50, 50, 60))  # Fallback color
+            # Create default platforms
+            self.platforms = [
+                pygame.Rect(0, self.height - 40, self.width, 40),  # Ground
+                pygame.Rect(300, 400, 200, 20),  # Platform 1
+                pygame.Rect(100, 300, 200, 20),  # Platform 2
+                pygame.Rect(500, 200, 200, 20)   # Platform 3
+            ]
 
-        # Visual elements
-        self.background = self._create_background()
-
-    def _process_tiles(self):
-        """Convert tile numbers to collision objects"""
-        for y, row in enumerate(self.tiles):
-            for x, tile in enumerate(row):
-                if tile == 1:  # Solid wall
-                    self.walls.append(pygame.Rect(
-                        x * self.tile_size,
-                        y * self.tile_size,
-                        self.tile_size,
-                        self.tile_size
+    def load_platforms(self):
+        platforms = []
+        try:
+            layer = self.tmx_data.get_layer_by_name('platforms')
+            for x, y, gid in layer:
+                if gid:
+                    px = x * self.tmx_data.tilewidth
+                    py = y * self.tmx_data.tileheight
+                    platforms.append(pygame.Rect(
+                        px, py,
+                        self.tmx_data.tilewidth,
+                        self.tmx_data.tileheight
                     ))
-                elif tile == 2:  # Platform
-                    self.platforms.append(pygame.Rect(
-                        x * self.tile_size,
-                        y * self.tile_size,
-                        self.tile_size,
-                        self.tile_size // 4  # Thin platform
-                    ))
+        except Exception as e:
+            print(f"Error loading platforms: {e}")
+            return self.create_default_platforms()
+        return platforms
 
-    def _create_background(self):
-        """Generate a simple background surface"""
-        bg = pygame.Surface((self.width, self.height))
-        bg.fill((40, 40, 60))  # Dark dungeon color
-
-        # Draw grid lines for debugging
-        for x in range(0, self.width, self.tile_size):
-            pygame.draw.line(bg, (60, 60, 80), (x, 0), (x, self.height))
-        for y in range(0, self.height, self.tile_size):
-            pygame.draw.line(bg, (60, 60, 80), (0, y), (self.width, y))
-
-        return bg
-
-    def check_collision(self, rect):
-        """Check collision with walls and platforms"""
-        for wall in self.walls:
-            if rect.colliderect(wall):
-                return True
-        return False
-
-    def check_platform(self, rect, velocity_y):
-        """Special platform collision (only from top)"""
-        if velocity_y <= 0:  # Only check when falling
-            return False
-
-        for platform in self.platforms:
-            if (rect.colliderect(platform) and
-                    rect.bottom > platform.top and
-                    (rect.bottom - velocity_y) <= platform.top):
-                return platform.top
-        return None
-
-    def draw(self, surface, camera_offset):
-        """Draw room elements"""
-        # Draw background
-        surface.blit(self.background, (-camera_offset[0], -camera_offset[1]))
-
-        # Draw walls (for debugging)
-        for wall in self.walls:
-            adjusted = wall.move(-camera_offset[0], -camera_offset[1])
-            pygame.draw.rect(surface, (100, 80, 60), adjusted)
-
-        # Draw platforms
-        for platform in self.platforms:
-            adjusted = platform.move(-camera_offset[0], -camera_offset[1])
-            pygame.draw.rect(surface, (80, 60, 40), adjusted)
+    def create_default_platforms(self):
+        return [
+            pygame.Rect(0, self.height - 40, self.width, 40),  # Ground
+            pygame.Rect(300, 400, 200, 20),  # Platform 1
+            pygame.Rect(100, 300, 200, 20),  # Platform 2
+            pygame.Rect(500, 200, 200, 20)   # Platform 3
+        ]

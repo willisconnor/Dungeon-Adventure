@@ -15,7 +15,19 @@ class Player(pygame.sprite.Sprite):
         self.gravity = 0.5
         self.on_ground = False
 
-    def update(self, room):
+    def check_collision(self, platforms):
+        for platform in platforms:
+            if self.rect.colliderect(platform):
+                return True
+        return False
+
+    def check_platform(self, platforms, velocity_y):
+        for platform in platforms:
+            if self.rect.colliderect(platform) and velocity_y > 0:
+                return platform.top
+        return None
+
+    def update(self, platforms):
         """Handle movement and collisions"""
         keys = pygame.key.get_pressed()
 
@@ -31,18 +43,18 @@ class Player(pygame.sprite.Sprite):
 
         # Check horizontal collisions
         self.rect.x += self.velocity.x
-        if room.check_collision(self.rect):
+        if self.check_collision(platforms):
             self.rect.x -= self.velocity.x
 
         # Check vertical collisions
         self.rect.y += self.velocity.y
-        platform_top = room.check_platform(self.rect, self.velocity.y)
+        platform_top = self.check_platform(platforms, self.velocity.y)
 
         if platform_top is not None:
             self.rect.bottom = platform_top
             self.velocity.y = 0
             self.on_ground = True
-        elif room.check_collision(self.rect):
+        elif self.check_collision(platforms):
             self.rect.y -= self.velocity.y
             self.velocity.y = 0
             self.on_ground = self.velocity.y > 0
