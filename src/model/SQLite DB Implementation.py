@@ -116,9 +116,12 @@ def initialize_database():
         ('knight', AnimationState.HURT.value, 'assets/sprites/heroes/Knight_1/knight/Hurt.png'),
         ('knight', AnimationState.DEAD.value, 'assets/sprites/heroes/knight/Knight_1/Dead.png'),
         ('knight', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/knight/Knight_1/Defend.png'),
+        ('knight', AnimationState.RUNNING.value, 'assets/sprites/heroes/knight/Knight_1/Run.png'),
+        ('knight', AnimationState.JUMPING.value, 'assets/sprites/heroes/knight/Knight_1/Jump.png'),
+        ('knight', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png'),
 
         # Archer sprite paths
-        ('archer', AnimationState.IDLE.value, 'assets/sprites/heroes/archer/Samurai_Archer/Idle.png'),
+        ('archer', AnimationState.IDLE.value, 'assets/sprites/heroes/archer/Samurai_Archer/Walk.png'),
         ('archer', AnimationState.WALKING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Run.png'),
         ('archer', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
         ('archer', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
@@ -126,18 +129,23 @@ def initialize_database():
         ('archer', AnimationState.HURT.value, 'assets/sprites/heroes/archer/Samurai_Archer/Hurt.png'),
         ('archer', AnimationState.DEAD.value, 'assets/sprites/heroes/archer/Samurai_Archer/Dead.png'),
         ('archer', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/archer/Samurai_Archer/Attack_1.png'),
-        ('archer', AnimationState.Arrow.value, 'assets/sprites/heroes/archer/Samurai_Archer/Arrow.png'),
+        ('archer', AnimationState.ARROW.value, 'assets/sprites/heroes/archer/Samurai_Archer/Arrow.png'),
+        ('archer', AnimationState.RUNNING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Run.png'),
+        ('archer', AnimationState.JUMPING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Jump.png'),
+        #('archer', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png'),
 
         # Cleric sprite paths
         ('cleric', AnimationState.IDLE.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Idle.png'),
-        ('cleric', AnimationState.WALKING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Run.png'),
+        ('cleric', AnimationState.WALKING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Walk.png'),
         ('cleric', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Attack_1.png'),
         ('cleric', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Attack_2.png'),
         ('cleric', AnimationState.HURT.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Hurt.png'),
         ('cleric', AnimationState.DEAD.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Dead.png'),
         ('cleric', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Fireball.png'),
-        ('cleric', AnimationState.FIREBALL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Charge.png')
-
+        ('cleric', AnimationState.FIREBALL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Charge.png'),
+        ('cleric', AnimationState.RUNNING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Run.png'),
+        ('cleric', AnimationState.JUMPING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Jump.png'),
+        #('cleric', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png')
 
     ]
 

@@ -3,7 +3,7 @@ from DungeonEntity import AnimationState, Direction
 import pygame
 import sqlite3
 
-class Hero(DungeonCharacter):
+class Hero(DungeonCharacter, pygame.sprite.Sprite):
     """Base Hero class that all hero types will inherit from"""
 
     def __init__(self, x, y, hero_type = "default"):
