@@ -24,6 +24,14 @@ class AnimationState(Enum):
     HURT = auto()
     DYING = auto()
     DEAD = auto()
+    #new animation states
+    RUNNING = auto()
+    JUMPING = auto()
+    FALLING = auto()
+    RUNNING_ATTACK = auto()
+    #projectiles
+    ARROW = auto()
+    FIREBALL = auto()
 
 
 """Abstract class for Dungeon Entities"""
