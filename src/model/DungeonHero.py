@@ -2,7 +2,8 @@ from DungeonCharacter import DungeonCharacter
 from DungeonEntity import AnimationState, Direction
 import pygame
 import sqlite3
-
+'''Connor Willis
+'''
 class Hero(DungeonCharacter, pygame.sprite.Sprite):
     """Base Hero class that all hero types will inherit from"""
 
