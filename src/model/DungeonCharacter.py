@@ -103,3 +103,4 @@ class DungeonCharacter(DungeonEntity):
         """get the number of frames for a givben animaiton state"""
         #T H IS SHOUDL BE OVERRIDDEN IN CHILD CLASSES
         return 4 #defaulkt value, should be overridden
+
