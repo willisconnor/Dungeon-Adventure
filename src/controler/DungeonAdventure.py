@@ -1,5 +1,5 @@
-from src.Module.Adventurer import Adventurer
-from src.View.Dungeon import Dungeon
+from src.model.Adventurer import Adventurer
+from src.view.Dungeon import Dungeon
 
 
 class DungeonAdventure:
