@@ -34,11 +34,13 @@ class AnimationState(Enum):
     FIREBALL = auto()
 
 
-"""Abstract class for Dungeon Entities"""
+"""Abstract class for Dungeon Entities, inherits from pygame.sprite.Sprite"""
 #sprites all the same size for PLAYERs only
-class DungeonEntity(ABC):
+class DungeonEntity(ABC, pygame.sprite.Sprite):
 
     def __init__(self, x, y, width, height, name, max_health, health, speed, animation_state):
+
+        super().__init__()
         self.x = x
         self.y = y
         self.width = width
@@ -64,11 +66,22 @@ class DungeonEntity(ABC):
         self.is_invulnerable = False
         self.invulnerable_timer = 0
 
+        #sprite specific shindigs
+        self.image = pygame.Surface((width, height))
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+
+
     @abstractmethod
     def update(self, dt):
         """Update entity state """
         self._update_hitbox()
         self._update_invulnerability(dt)
+
+        #sync rect with position
+        self.rect.x = self.x
+        self.rect.y = self.y
 
     @abstractmethod
     def take_damage(self, damage):

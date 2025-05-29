@@ -7,13 +7,18 @@ from src.model.knight import Knight
 from src.model.archer import Archer
 from src.model.cleric import Cleric
 from src.model.DemonBoss import DemonBoss
-from src.model.ProjectileManager import ProjectileManager
+from src.model.ProjectileManager import ProjectileManager, ProjectileType
 from src.model.Platform import PlatformManager, Platform
 from src.utils.SpriteSheetHandler import SpriteManager
 from src.model.DungeonEntity import Direction, AnimationState
 import random
 from tiles import *
 
+class HeroType(Enum):
+    """available hero types"""
+    KNIGHT = auto()
+    ARCHER = auto()
+    CLERIC = auto()
 
 class GameState(Enum):
     """Enum for different game states"""
@@ -22,6 +27,7 @@ class GameState(Enum):
     PAUSED = auto()
     GAME_OVER = auto()
     VICTORY = auto()
+    HERO_SELECT = auto()
 
 
 class Game:
@@ -31,7 +37,11 @@ class Game:
         self.screen = screen
         self.width = width
         self.height = height
-        self.state = GameState.MENU
+        self.state = GameState.HERO_SELECT
+
+        #game loop properties
+        self.clock = pygame.time.Clock()
+        self.running = False
 
         # Initialize sprite manager
         self.sprite_manager = SpriteManager()
@@ -53,6 +63,8 @@ class Game:
         # UI elements
         self.font = pygame.font.Font(None, 36)
         self.ui_font = pygame.font.Font(None, 24)
+        self.selection_font = pygame.font.Font(None, 48)
+        self.description_font = pygame.font.Font(None, 24)
 
         # Input handling
         self.space_pressed = False
@@ -64,8 +76,54 @@ class Game:
         # Background
         self.background_color = (50, 50, 80)  # Dark blue-ish
 
-        # Initialize game
-        self._initialize_game()
+        #hero selection
+        self.selected_hero_type = None
+        self.hero_selection_mode = False
+        self.hero_selection_made = False
+
+        # Create sprite groups
+        self.all_sprites = pygame.sprite.Group()
+        self.hero_sprites = pygame.sprite.Group()
+        self.enemy_sprites = pygame.sprite.Group()
+        self.projectile_sprites = pygame.sprite.Group()
+        self.platform_sprites = pygame.sprite.Group()
+
+        # Layers for rendering order
+        self.background_sprites = pygame.sprite.Group()  # Platforms, background elements
+        self.midground_sprites = pygame.sprite.Group()  # Heroes, enemies
+        self.foreground_sprites = pygame.sprite.Group()  # Projectiles, effects
+
+        # Collision groups
+        self.damageable_sprites = pygame.sprite.Group()  # Everything that can take damage
+        self.solid_sprites = pygame.sprite.Group()  # Platforms and walls
+
+    def run(self):
+        """main game loop"""
+        self.running = True
+
+        while self.running:
+            #calc delta time
+            dt = self.clock.tick(60)/1000.0 #60 fps, dt in seconds
+
+            #handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                else:
+                    self.handle_event(event)
+
+            #update game state
+            if self.state == GameState.PLAYING:
+                keys = pygame.key.get_pressed()
+                self.update(dt, keys)
+
+            #draw it all
+            self.draw()
+
+            #update display
+            pygame.display.flip()
+
+
 
     def _initialize_game(self):
         """Initialize or reset the game state"""
@@ -73,29 +131,54 @@ class Game:
         self.heroes.clear()
         self.enemies.clear()
         self.projectile_manager.clear()
+        # Clear all sprite groups
+        self.all_sprites.empty()
+        self.hero_sprites.empty()
+        self.enemy_sprites.empty()
+        self.projectile_sprites.empty()
+        self.platform_sprites.empty()
 
-        # Create heroes at starting position Change to selecting hero
-        start_x = 100
+        #only proceed if hero has been selected
+        if not self.hero_selection_mode:
+            return
+
+        #create only the selected hero
+        start_x = 400 # center of screen
         start_y = 500
 
-        knight = Knight(start_x, start_y)
-        archer = Archer(start_x + 150, start_y)
-        cleric = Cleric(start_x + 300, start_y)
+        if self.selected_hero_type == HeroType.KNIGHT:
+            hero = Knight(start_x, start_y)
+        elif self.selected_hero_type == HeroType.ARCHER:
+            hero = Archer(start_x, start_y)
+            hero.projectile_manager = self.projectile_manager
+        elif self.selected_hero_type == HeroType.CLERIC:
+            hero = Cleric(start_x, start_y)
+            hero.projectile_manager = self.projectile_manager
+        else:
+            return  # No hero selected
 
-        # Set projectile manager for heroes that need it
-        archer.projectile_manager = self.projectile_manager
-        cleric.projectile_manager = self.projectile_manager
+        # Add heroes to sprite groups
+        for hero in self.heroes:
+            self.all_sprites.add(hero)
+            self.hero_sprites.add(hero)
+            self.midground_sprites.add(hero)
+            self.damageable_sprites.add(hero)
 
-        self.heroes = [knight, archer, cleric]
-        self.active_hero = self.heroes[0]
+            # Add enemies to sprite groups
+        for enemy in self.enemies:
+            self.all_sprites.add(enemy)
+            self.enemy_sprites.add(enemy)
+            self.midground_sprites.add(enemy)
+            self.damageable_sprites.add(enemy)
 
-        # Create platforms
-        self._create_level_platforms()
+        self.heroes = [hero]
+        self.active_hero = hero
+        self.current_hero_index = 0
 
-        # Create enemies
+        #create enemies
         self._spawn_enemies()
 
-        # Set game state
+        #set the game state
         self.state = GameState.PLAYING
 
     def _create_level_platforms(self):
@@ -135,74 +218,86 @@ class Game:
     def handle_event(self, event):
         """Handle pygame events"""
         if event.type == pygame.KEYDOWN:
-            if self.state == GameState.MENU:
-                if event.key == pygame.K_SPACE:
+            if self.state == GameState.HERO_SELECT:
+                # Hero selection
+                if event.key == pygame.K_1:
+                    self.selected_hero_type = HeroType.KNIGHT
+                    self.hero_selection_made = True
                     self._initialize_game()
+                elif event.key == pygame.K_2:
+                    self.selected_hero_type = HeroType.ARCHER
+                    self.hero_selection_made = True
+                    self._initialize_game()
+                elif event.key == pygame.K_3:
+                    self.selected_hero_type = HeroType.CLERIC
+                    self.hero_selection_made = True
+                    self._initialize_game()
+                elif event.key == pygame.K_ESCAPE:
+                    self.running = False
 
             elif self.state == GameState.PLAYING:
-                # Switch heroes with number keys
-                if event.key == pygame.K_1 and len(self.heroes) > 0:
-                    self.current_hero_index = 0
-                    self.active_hero = self.heroes[0]
-                elif event.key == pygame.K_2 and len(self.heroes) > 1:
-                    self.current_hero_index = 1
-                    self.active_hero = self.heroes[1]
-                elif event.key == pygame.K_3 and len(self.heroes) > 2:
-                    self.current_hero_index = 2
-                    self.active_hero = self.heroes[2]
-
-                # Pause game
-                elif event.key == pygame.K_ESCAPE:
+                # Game controls (no hero switching)
+                if event.key == pygame.K_ESCAPE:
                     self.state = GameState.PAUSED
-
-                # Attack
                 elif event.key == pygame.K_SPACE:
                     self.space_pressed = True
 
             elif self.state == GameState.PAUSED:
                 if event.key == pygame.K_ESCAPE:
                     self.state = GameState.PLAYING
+                elif event.key == pygame.K_q:
+                    self.running = False  # Quit from pause menu
 
             elif self.state == GameState.GAME_OVER or self.state == GameState.VICTORY:
                 if event.key == pygame.K_SPACE:
-                    self.state = GameState.MENU
+                    # Reset for new game
+                    self.hero_selection_made = False
+                    self.selected_hero_type = None
+                    self.state = GameState.HERO_SELECT
+                elif event.key == pygame.K_ESCAPE:
+                    self.running = False
 
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_SPACE:
                 self.space_pressed = False
 
     def update(self, dt, keys):
-        """Update game state"""
-        if self.state == GameState.PLAYING:
-            # Update active hero input
+       """update game state"""
+       if self.state == GameState.PLAYING:
+           # Update active hero input
             if self.active_hero and self.active_hero.is_alive:
-                self.active_hero.handle_input(keys, self.space_pressed)
+               self.active_hero.handle_input(keys, self.space_pressed)
 
+            # Update all sprites at once
+            self.all_sprites.update(dt)
+
+            #handle collisions using sprite groups
+            self._handle_collisions()
             # Update all heroes
             for hero in self.heroes:
-                hero.update(dt)
+               hero.update(dt)
 
-                # Check platform collisions for heroes
-                if hasattr(hero, 'is_falling'):  # If using movement extension
-                    self.platform_manager.check_collisions(hero)
+            # Check platform collisions for heroes
+            if hasattr(hero, 'is_falling'):
+                self.platform_manager.check_collisions(hero)
 
             # Update enemies
             for enemy in self.enemies:
-                enemy.update(dt)
+               enemy.update(dt)
 
-                # Basic AI - move towards nearest hero
-                if enemy.is_alive and self.active_hero:
-                    enemy.move_towards_target(self.active_hero.x, self.active_hero.y, dt)
+               # Basic AI - move towards nearest hero
+               if enemy.is_alive and self.active_hero:
+                   enemy.move_towards_target(self.active_hero.x, self.active_hero.y, dt)
 
-                    # Try to attack if in range
-                    enemy.attack(self.active_hero)
+                   # Try to attack if in range
+                   enemy.attack(self.active_hero)
 
-            # Update projectiles
+            #Update projectiles
             self.projectile_manager.update(dt)
 
             # Check projectile collisions
             hero_projectile_hits = self.projectile_manager.check_collisions(self.enemies)
-            # In a full implementation, you'd also check enemy projectiles vs heroes
+            # later: check enemy hits vs heros
 
             # Update platforms
             self.platform_manager.update(dt)
@@ -217,8 +312,64 @@ class Game:
             # Check win/lose conditions
             self._check_game_state()
 
-        # Reset space pressed state
-        self.space_pressed = False
+            # Reset space pressed state
+            self.space_pressed = False
+
+    def _handle_collisions(self):
+        """Handle all collisions using sprite groups"""
+        # Hero attacks vs enemies
+        for hero in self.hero_sprites:
+            if hero.is_attacking:
+                attack_hitbox = hero.get_attack_hitbox()
+                if attack_hitbox:
+                    # Check collision with all enemies
+                    for enemy in self.enemy_sprites:
+                        if enemy.is_alive and attack_hitbox.colliderect(enemy.hitbox):
+                            if enemy not in hero.hit_targets:
+                                damage = hero.calculate_damage(enemy)
+                                if enemy.take_damage(damage):
+                                    hero.hit_targets.add(enemy)
+
+        # Projectile collisions
+        for projectile in self.projectile_sprites:
+            if projectile.active:
+                # Determine which group to check based on projectile owner
+                if projectile.owner in self.hero_sprites:
+                    targets = self.enemy_sprites
+                else:
+                    targets = self.hero_sprites
+
+                # Use sprite collision detection
+                hit_list = pygame.sprite.spritecollide(
+                    projectile, targets, False,
+                    collided=lambda p, t: p.hitbox.colliderect(t.hitbox) and t.is_alive
+                )
+
+                for target in hit_list:
+                    if target not in projectile.hit_targets:
+                        if target.take_damage(projectile.damage):
+                            projectile.hit_targets.add(target)
+                            if projectile.projectile_type == ProjectileType.ARROW:
+                                projectile.active = False
+                                break
+
+        # Platform collisions for heroes
+        for hero in self.hero_sprites:
+            if hasattr(hero, 'is_falling') and hero.is_falling:
+                # Check platform collisions
+                platform_hits = pygame.sprite.spritecollide(
+                    hero, self.platform_sprites, False,
+                    collided=lambda h, p: h.rect.bottom >= p.rect.top and h.rect.bottom <= p.rect.top + 20
+                )
+
+                for platform in platform_hits:
+                    if not platform.broken:
+                        hero.y = platform.rect.top - hero.height
+                        hero.land()
+
+                        # Move with moving platforms
+                        if platform.is_moving and platform.move_axis == "x":
+                            hero.x += platform.move_speed * platform.move_direction
 
     def _update_camera(self):
         """Update camera position to follow active hero"""
@@ -252,10 +403,27 @@ class Game:
         # Clear screen
         self.screen.fill(self.background_color)
 
-        if self.state == GameState.MENU:
+        if self.state == GameState.HERO_SELECT:
+            self._draw_hero_select()
+        elif self.state == GameState.MENU:
             self._draw_menu()
-
         elif self.state == GameState.PLAYING:
+            # Create a temporary group for camera-adjusted drawing
+            visible_sprites = pygame.sprite.Group()
+
+            # Draw layers in order
+            for layer in [self.background_sprites, self.midground_sprites, self.foreground_sprites]:
+                for sprite in layer:
+                    # Check if sprite is visible on screen
+                    if (sprite.rect.right > self.camera_x and
+                            sprite.rect.left < self.camera_x + self.width and
+                            sprite.rect.bottom > self.camera_y and
+                            sprite.rect.top < self.camera_y + self.height):
+                        # Draw with camera offset
+                        self.screen.blit(
+                            sprite.image,
+                            (sprite.rect.x - self.camera_x, sprite.rect.y - self.camera_y)
+                        )
             self._draw_game()
             self._draw_ui()
 
@@ -269,6 +437,74 @@ class Game:
         elif self.state == GameState.VICTORY:
             self._draw_victory()
 
+    def _draw_hero_select(self):
+        """Draw hero selection screen"""
+        # Background
+        self.screen.fill((20, 20, 40))
+
+        # Title
+        title_text = self.font.render("SELECT YOUR HERO", True, (255, 255, 255))
+        title_rect = title_text.get_rect(center=(self.width // 2, 80))
+        self.screen.blit(title_text, title_rect)
+
+        # Hero options
+        hero_data = [
+            {
+                'name': '1. KNIGHT',
+                'stats': 'Health: 150 | Damage: 10 | Speed: 6',
+                'special': 'Special: Shield Bash',
+                'description': 'Tank with high defense',
+                'color': (150, 150, 200),
+                'y_pos': 200
+            },
+            {
+                'name': '2. ARCHER',
+                'stats': 'Health: 100 | Damage: 8 | Speed: 8',
+                'special': 'Special: Rain of Arrows',
+                'description': 'Ranged attacker',
+                'color': (150, 200, 150),
+                'y_pos': 320
+            },
+            {
+                'name': '3. CLERIC',
+                'stats': 'Health: 120 | Damage: 7 | Speed: 7',
+                'special': 'Special: Heal + Fireball',
+                'description': 'Support with magic',
+                'color': (200, 150, 150),
+                'y_pos': 440
+            }
+        ]
+
+        # Draw each hero option
+        for hero_info in hero_data:
+            y = hero_info['y_pos']
+
+            # Hero name
+            name_text = self.selection_font.render(hero_info['name'], True, hero_info['color'])
+            name_rect = name_text.get_rect(center=(self.width // 2, y))
+            self.screen.blit(name_text, name_rect)
+
+            # Stats
+            stats_text = self.description_font.render(hero_info['stats'], True, (200, 200, 200))
+            stats_rect = stats_text.get_rect(center=(self.width // 2, y + 35))
+            self.screen.blit(stats_text, stats_rect)
+
+            # Special
+            special_text = self.description_font.render(hero_info['special'], True, (255, 200, 100))
+            special_rect = special_text.get_rect(center=(self.width // 2, y + 60))
+            self.screen.blit(special_text, special_rect)
+
+            # Description
+            desc_text = self.description_font.render(hero_info['description'], True, (150, 150, 150))
+            desc_rect = desc_text.get_rect(center=(self.width // 2, y + 85))
+            self.screen.blit(desc_text, desc_rect)
+
+        # Instructions
+        instruction_text = self.ui_font.render("Press 1, 2, or 3 to select", True, (255, 255, 0))
+        instruction_rect = instruction_text.get_rect(center=(self.width // 2, self.height - 40))
+        self.screen.blit(instruction_text, instruction_rect)
+
+    #not used?
     def _draw_menu(self):
         """Draw the main menu"""
         title_text = self.font.render("DUNGEON HEROES", True, (255, 255, 255))
@@ -320,6 +556,8 @@ class Game:
 
                 pygame.draw.rect(self.screen, color, rect)
 
+        #DRAW FLOOR TILED
+
         # Draw enemies
         for enemy in self.enemies:
             if enemy.is_alive:
@@ -344,7 +582,7 @@ class Game:
                 pygame.draw.rect(self.screen, (100, 0, 0), (bar_x, bar_y, bar_width, bar_height))
                 pygame.draw.rect(self.screen, (0, 200, 0), (bar_x, bar_y, bar_width * health_percent, bar_height))
 
-        # Draw heroes
+        # Draw heroes, stopped here
         for i, hero in enumerate(self.heroes):
             if hero.is_alive:
                 # Simple rectangle representation
