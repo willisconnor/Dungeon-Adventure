@@ -36,8 +36,7 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('Dungeon Adventure - Single Room Test')
 
-    #create the game
-    game = Game(screen, SCREEN_WIDTH, SCREEN_HEIGHT)
+
 
     print("Starting game...")
     print("Controls: ")

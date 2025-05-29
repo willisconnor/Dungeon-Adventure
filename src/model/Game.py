@@ -16,9 +16,9 @@ from src.model.tiles import *
 
 class HeroType(Enum):
     """available hero types"""
-    KNIGHT = auto()
-    ARCHER = auto()
-    CLERIC = auto()
+    KNIGHT = "knight"
+    ARCHER = "archer"
+    CLERIC = "cleric"
 
 class GameState(Enum):
     """Enum for different game states"""
@@ -147,6 +147,7 @@ class Game:
         start_y = 500
 
         if self.selected_hero_type == HeroType.KNIGHT:
+            print("Key 1 pressed - selecting KNIGHT") #debug
             hero = Knight(start_x, start_y)
         elif self.selected_hero_type == HeroType.ARCHER:
             hero = Archer(start_x, start_y)
@@ -180,6 +181,7 @@ class Game:
 
         #set the game state
         self.state = GameState.PLAYING
+
 
     def _create_level_platforms(self):
         """Create platforms for the level"""
@@ -218,20 +220,23 @@ class Game:
     def handle_event(self, event):
         """Handle pygame events"""
         if event.type == pygame.KEYDOWN:
+            print(f"Current game state: {self.state}")
             if self.state == GameState.HERO_SELECT:
                 # Hero selection
                 if event.key == pygame.K_1:
+                    print("Key 1 pressed - selecting KNIGHT") #debug
                     self.selected_hero_type = HeroType.KNIGHT
                     self.hero_selection_made = True
-                    self._initialize_game()
+                    self.state = GameState.PLAYING
+
                 elif event.key == pygame.K_2:
                     self.selected_hero_type = HeroType.ARCHER
                     self.hero_selection_made = True
-                    self._initialize_game()
+                    self.state = GameState.PLAYING
                 elif event.key == pygame.K_3:
                     self.selected_hero_type = HeroType.CLERIC
                     self.hero_selection_made = True
-                    self._initialize_game()
+                    self.state = GameState.PLAYING
                 elif event.key == pygame.K_ESCAPE:
                     self.running = False
 
@@ -278,8 +283,8 @@ class Game:
                hero.update(dt)
 
             # Check platform collisions for heroes
-            if hasattr(hero, 'is_falling'):
-                self.platform_manager.check_collisions(hero)
+            #if hasattr(self.hero, 'is_falling'):
+               # self.platform_manager.check_collisions(hero)
 
             # Update enemies
             for enemy in self.enemies:
