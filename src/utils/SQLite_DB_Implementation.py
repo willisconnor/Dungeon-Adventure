@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from DungeonEntity import AnimationState
+from src.model.DungeonEntity import AnimationState
 
 def initialize_database():
     """Create and initialize the game database with hero data"""
@@ -85,7 +85,7 @@ def initialize_database():
         #Deflect special attack, define in hero class
         ('archer', AnimationState.SPECIAL_SKILL.value, 6),
         #possibly store arrow sprite here
-        ('archer', AnimationState.Arrow.value, 1),
+        ('archer', AnimationState.ARROW.value, 1),
 
         # Cleric animations
         ('cleric', AnimationState.IDLE.value, 7),

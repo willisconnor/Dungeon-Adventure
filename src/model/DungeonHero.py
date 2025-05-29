@@ -1,5 +1,5 @@
-from DungeonCharacter import DungeonCharacter
-from DungeonEntity import AnimationState, Direction
+from src.model.DungeonCharacter import DungeonCharacter
+from src.model.DungeonEntity import AnimationState, Direction
 import pygame
 import sqlite3
 '''Connor Willis

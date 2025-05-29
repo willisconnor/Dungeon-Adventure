@@ -12,7 +12,7 @@ from src.model.Platform import PlatformManager, Platform
 from src.utils.SpriteSheetHandler import SpriteManager
 from src.model.DungeonEntity import Direction, AnimationState
 import random
-from tiles import *
+from src.model.tiles import *
 
 class HeroType(Enum):
     """available hero types"""
@@ -460,7 +460,7 @@ class Game:
             {
                 'name': '2. ARCHER',
                 'stats': 'Health: 100 | Damage: 8 | Speed: 8',
-                'special': 'Special: Rain of Arrows',
+                'special': 'Special: Powerful Shot',
                 'description': 'Ranged attacker',
                 'color': (150, 200, 150),
                 'y_pos': 320
@@ -585,22 +585,30 @@ class Game:
         # Draw heroes, stopped here
         for i, hero in enumerate(self.heroes):
             if hero.is_alive:
-                # Simple rectangle representation
-                # In a full game, you'd use the sprite manager here
-                hero_rect = pygame.Rect(
-                    hero.x - self.camera_x,
-                    hero.y - self.camera_y,
-                    hero.width,
-                    hero.height
+                #get the current sprite based on anim state
+                current_sprite = self.sprite_manager.get_sprite(
+                    hero.hero_type,
+                    hero.animation_state,
+                    hero.current_frame
                 )
+                if current_sprite:
+                    #calc pos
+                    screen_x = hero.x -self.camera_x
+                    screen_y = hero.y - self.camera_y
 
-                # Different colors for different heroes
-                if isinstance(hero, Knight):
-                    color = (150, 150, 200)
-                elif isinstance(hero, Archer):
-                    color = (150, 200, 150)
-                else:  # Cleric
-                    color = (200, 150, 150)
+                    #draw sprite at hero pos
+                    self.screen.blit(current_sprite,(screen_x, screen_y))
+
+                else:
+                    #fallback to rect
+                    hero_rect = pygame.Rect(
+                        hero.x - self.camera_x,
+                        hero.y - self.camera_y,
+                        hero.width,
+                        hero.height
+                    )
+
+
 
                 # Highlight active hero
                 if hero == self.active_hero:
@@ -642,44 +650,59 @@ class Game:
                 pygame.draw.rect(self.screen, color, proj_rect)
 
     def _draw_ui(self):
-        """Draw the game UI"""
-        # Draw hero health bars and info
-        y_offset = 10
-        for i, hero in enumerate(self.heroes):
-            # Hero name and number
-            name = hero.__class__.__name__
-            text = self.ui_font.render(f"{i + 1}. {name}", True, (255, 255, 255))
-            self.screen.blit(text, (10, y_offset))
+        """Simplified UI for single hero"""
+        if not self.active_hero:
+            return
 
-            # Health bar
-            bar_x = 120
-            bar_y = y_offset + 5
-            bar_width = 150
-            bar_height = 15
+        # Hero info
+        hero_name = self.active_hero.__class__.__name__
+        name_text = self.ui_font.render(f"{hero_name}", True, (255, 255, 255))
+        self.screen.blit(name_text, (10, 10))
 
-            # Background
-            pygame.draw.rect(self.screen, (60, 60, 60), (bar_x, bar_y, bar_width, bar_height))
+        # Health bar
+        bar_x = 10
+        bar_y = 40
+        bar_width = 200
+        bar_height = 20
 
-            # Health
-            if hero.is_alive:
-                health_percent = hero.health / hero.max_health
-                health_color = (0, 200, 0) if health_percent > 0.5 else (200, 200, 0) if health_percent > 0.25 else (
-                    200, 0, 0)
-                pygame.draw.rect(self.screen, health_color, (bar_x, bar_y, bar_width * health_percent, bar_height))
+        # Background
+        pygame.draw.rect(self.screen, (60, 60, 60), (bar_x, bar_y, bar_width, bar_height))
 
-            # Border
-            border_color = (255, 255, 0) if hero == self.active_hero else (100, 100, 100)
-            pygame.draw.rect(self.screen, border_color, (bar_x, bar_y, bar_width, bar_height), 2)
+        # Health
+        if self.active_hero.is_alive:
+            health_percent = self.active_hero.health / self.active_hero.max_health
+            health_color = (0, 200, 0) if health_percent > 0.5 else (200, 200, 0) if health_percent > 0.25 else (200, 0, 0)
+            pygame.draw.rect(self.screen, health_color, (bar_x, bar_y, bar_width * health_percent, bar_height))
 
-            # Special ability cooldown
-            if hero.special_cooldown_remaining > 0:
-                cd_text = self.ui_font.render(f"Q: {hero.special_cooldown_remaining:.1f}s", True, (200, 200, 200))
-                self.screen.blit(cd_text, (bar_x + bar_width + 10, y_offset))
-            else:
-                cd_text = self.ui_font.render("Q: Ready!", True, (0, 255, 0))
-                self.screen.blit(cd_text, (bar_x + bar_width + 10, y_offset))
+        # Border
+        pygame.draw.rect(self.screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
 
-            y_offset += 30
+        # Health text
+        health_text = self.ui_font.render(f"{self.active_hero.health}/{self.active_hero.max_health}", True, (255, 255, 255))
+        self.screen.blit(health_text, (bar_x + bar_width + 10, bar_y))
+
+        # Special cooldown
+        if self.active_hero.special_cooldown_remaining > 0:
+            cd_text = self.ui_font.render(f"Special (Q): {self.active_hero.special_cooldown_remaining:.1f}s", True, (200, 200, 200))
+            self.screen.blit(cd_text, (10, 70))
+        else:
+            cd_text = self.ui_font.render("Special (Q): Ready!", True, (0, 255, 0))
+            self.screen.blit(cd_text, (10, 70))
+
+        # Controls reminder (bottom right)
+        controls = [
+            "A/D - Move",
+            "SPACE - Attack",
+            "Q - Special",
+            "E - Defend"
+        ]
+
+        y_offset = self.height - 100
+        for control in controls:
+            text = self.ui_font.render(control, True, (150, 150, 150))
+            text_rect = text.get_rect(right=self.width - 10, top=y_offset)
+            self.screen.blit(text, text_rect)
+            y_offset += 20
 
     def _draw_pause_overlay(self):
         """Draw pause screen overlay"""
@@ -706,9 +729,13 @@ class Game:
         game_over_rect = game_over_text.get_rect(center=(self.width // 2, self.height // 2))
         self.screen.blit(game_over_text, game_over_rect)
 
-        retry_text = self.ui_font.render("Press SPACE to Return to Menu", True, (150, 150, 150))
+        retry_text = self.ui_font.render("Press SPACE to Try Again", True, (150, 150, 150))
         retry_rect = retry_text.get_rect(center=(self.width // 2, self.height // 2 + 50))
         self.screen.blit(retry_text, retry_rect)
+
+        quit_text = self.ui_font.render("Press ESC to Quit", True, (150, 150, 150))
+        quit_rect = quit_text.get_rect(center=(self.width // 2, self.height // 2 + 80))
+        self.screen.blit(quit_text, quit_rect)
 
     def _draw_victory(self):
         """Draw victory screen"""
@@ -718,6 +745,10 @@ class Game:
         victory_rect = victory_text.get_rect(center=(self.width // 2, self.height // 2))
         self.screen.blit(victory_text, victory_rect)
 
-        continue_text = self.ui_font.render("Press SPACE to Return to Menu", True, (150, 200, 150))
+        continue_text = self.ui_font.render("Press SPACE for New Game", True, (150, 200, 150))
         continue_rect = continue_text.get_rect(center=(self.width // 2, self.height // 2 + 50))
         self.screen.blit(continue_text, continue_rect)
+
+        quit_text = self.ui_font.render("Press ESC to Quit", True, (150, 200, 150))
+        quit_rect = quit_text.get_rect(center=(self.width // 2, self.height // 2 + 80))
+        self.screen.blit(quit_text, quit_rect)

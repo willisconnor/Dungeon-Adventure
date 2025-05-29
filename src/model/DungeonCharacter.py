@@ -1,4 +1,4 @@
-from DungeonEntity import DungeonEntity, AnimationState, Direction
+from src.model.DungeonEntity import DungeonEntity, AnimationState, Direction
 
 class DungeonCharacter(DungeonEntity):
     """Base character class for both hero and enemy, inherits from DungeonEntity"""
