@@ -1,5 +1,24 @@
 #Connor willis
+from enum import Enum
+
 import pygame
+
+from src.model.DungeonHero import Hero
+#Connor Willis
+
+#enum for items
+class ItemType(Enum):
+    HEALING_POTION = "healing"
+    VISION_POTION = "vision"
+    PIT = "pit"
+    PILLAR_ABSTRACTION = "abstraction"
+    PILLAR_ENCAPSULATION = "encapsulation"
+    PILLAR_INHERITANCE = "inheritance"
+    PILLAR_POLYMORPHISM = "polymorphism"
+    ENTRANCE = "entrance"
+    EXIT = "exit"
+    GOLD = "gold"
+    WEAPON = "weapon"
 
 
 class Item:

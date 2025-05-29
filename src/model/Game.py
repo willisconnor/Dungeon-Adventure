@@ -12,6 +12,7 @@ from src.model.Platform import PlatformManager, Platform
 from src.utils.SpriteSheetHandler import SpriteManager
 from src.model.DungeonEntity import Direction, AnimationState
 import random
+from tiles import *
 
 
 class GameState(Enum):
@@ -73,7 +74,7 @@ class Game:
         self.enemies.clear()
         self.projectile_manager.clear()
 
-        # Create heroes at starting position
+        # Create heroes at starting position Change to selecting hero
         start_x = 100
         start_y = 500
 
