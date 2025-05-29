@@ -1,7 +1,7 @@
 import pygame
 import random
 import os
-from src.Model.Adventurer import Adventurer
+from src.model.Adventurer import Adventurer
 from src.View.Dungeon import Dungeon
 from src.View.Room import Room
 
