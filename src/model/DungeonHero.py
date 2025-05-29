@@ -17,6 +17,9 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         #initialize with stats from databse
         super().__init__(x,y, max_health = stats["max_health"], speed = stats["speed"], damage = stats["damage"])
         #add more to the above line if i wish to have more stats
+        self.damage = stats["damage"]
+        self.attack_range = stats["attack_range"]
+        #self.special_cooldown = stats["special_cooldown"]
 
         #Hero specific properties
         self.is_moving = False
@@ -27,6 +30,22 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.special_cooldown = stats["special_cooldown"]
         self.special_cooldown_remaining = 0
         self.using_special = False
+
+        self.is_attacking = False
+        self.attack_timer = 0
+        self.attack_combo = 0
+        self.attack_complete = True
+        self.attack_window = 0
+        self.hit_targets = set()
+
+        #movement extension properties
+        self.is_jumping = False
+        self.is_falling = False
+        self.jump_velocity = 15
+        self.y_velocity = 0
+        self.gravity = 0.8
+        self.ground_y = self.y #this might cause issues
+        self.on_ground = True
 
     def _load_hero_stats(self):
         """Load hero stats from SQLite Database"""
@@ -162,6 +181,8 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         if not space_pressed:
             self.can_input = True
 
+    #jump stuff? or possibly the entering/exiting rooms that Zach talked about
+
     def update(self, dt):
         """update hero state"""
         super().update(dt)
@@ -172,6 +193,19 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             if self.special_cooldown_remaining < 0:
                 self.special_cooldown_remaining = 0
 
+        #update attack timer
+        if self.attack_timer > 0:
+            self.special_cooldown_remaining -= dt
+            if self.attack_timer <= 0:
+                self.is_attacking = False
+
+        #ground check
+        if self.y >= self.ground_y:
+            self.y = self.ground_y
+            self. on_ground = True
+            self.is_falling = False
+            self.y_velocity = 0
+
         #update animaiton state based on current actions
         if self.is_alive and not self.animation_state in [AnimationState.HURT, AnimationState.DYING, AnimationState.DEAD]:
             self._update_animation_state()
@@ -181,9 +215,12 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         #store previous state before changing
         self.last_animation_state = self.animation_state
 
+        if not self.is_alive:
+            return
+
         #determine new animation state with priority for special abilities, attacks, and defending
         if self.using_special:
-            new_state = AnimationState.SPECIAL
+            new_state = AnimationState.SPECIAL_SKILL
         elif self.is_attacking:
             if self.attack_combo == 1:
                 new_state = AnimationState.ATTACKING_1
@@ -195,6 +232,8 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
                 new_state = AnimationState.IDLE
         elif self.is_defending:
             new_state = AnimationState.DEFENDING
+        elif self.is_falling:
+            new_state = AnimationState.FALLING
         elif self.is_moving:
             new_state = AnimationState.WALKING
         else:
@@ -202,7 +241,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
 
         #only change state if its different from current
         if new_state != self.animation_state:
-            self.animation_stater = new_state
+            self.animation_state = new_state
 
             #only reset frame index if not chaining attacks
             if not (self.is_attacking and self.last_animation_state in [AnimationState.ATTACKING_1, AnimationState.ATTACKING_2, AnimationState.ATTACKING_3] and
@@ -263,6 +302,27 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         """Activate heros special ability, to be implemented by child classes"""
         self.using_special = True
         self.special_cooldown_remaining = self.special_cooldown
+
+    def take_damage(self, damage):
+        """Take damage, return True if hit, False if not"""
+        if damage <= 0:
+            return False
+        if not self.is_alive or self.is_invulnerable or self.is_defending:
+            return False
+
+        self.health -= damage
+
+        if self.health <= 0:
+            self.health = 0
+            self.is_alive = False
+            self.animation_state = AnimationState.DEAD
+            return True
+
+        self.is_invulnerable = True
+        self.invulnerable_timer = 1.0
+        self.animation_state = AnimationState.HURT
+        return True
+
 
     def get_sprite_path(self, animation_state):
         """Get the sprite path for a specific animaiton state"""

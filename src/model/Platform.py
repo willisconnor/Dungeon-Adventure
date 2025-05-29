@@ -149,29 +149,3 @@ class PlatformManager:
 
 
 # Example usage:
-"""
-# In your game initialization
-platform_manager = PlatformManager()
-
-# Add some platforms
-ground = Platform(0, 550, 800, 50)
-platform_manager.add_platform(ground)
-
-floating_platform = Platform(300, 400, 200, 20)
-platform_manager.add_platform(floating_platform)
-
-moving_platform = Platform(100, 300, 100, 20, platform_type="moving")
-moving_platform.move_distance = 150
-platform_manager.add_platform(moving_platform)
-
-# In your game loop
-def update(dt):
-    # Update hero
-    hero.update(dt)
-
-    # Update platforms
-    platform_manager.update(dt)
-
-    # Check collisions
-    platform_manager.check_collisions(hero)
-"""

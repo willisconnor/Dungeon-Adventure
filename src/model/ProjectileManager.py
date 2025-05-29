@@ -1,6 +1,8 @@
 import pygame
 from enum import Enum
 
+from src.model.DungeonEntity import Direction
+
 
 class ProjectileType(Enum):
     ARROW = 0
@@ -153,7 +155,7 @@ class Projectile:
 
 
 class ProjectileManager:
-    """Class to manage multiple projectiles"""
+    """Class to manage multiple projectiles, all in the game"""
 
     def __init__(self):
         self.projectiles = []
@@ -289,32 +291,3 @@ def extend_cleric_with_projectiles(Cleric):
     return Cleric
 
 
-# Example usage:
-"""
-# In your game initialization
-projectile_manager = ProjectileManager()
-
-# Extend archer and cleric classes
-archer = Archer(100, 200)
-archer.projectile_manager = projectile_manager  # Inject projectile manager
-
-cleric = Cleric(150, 200)
-cleric.projectile_manager = projectile_manager  # Inject projectile manager
-
-# In your game loop
-def update(dt):
-    # Update entities
-    archer.update(dt)
-    cleric.update(dt)
-
-    # Update projectiles
-    projectile_manager.update(dt)
-
-    # Check for projectile hits on enemies
-    hit_enemies = projectile_manager.check_collisions(enemy_list)
-
-    # Handle hit enemies (play effects, update score, etc.)
-    for enemy in hit_enemies:
-        # Handle enemy being hit
-        pass
-"""

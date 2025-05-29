@@ -67,7 +67,8 @@ class DungeonEntity(ABC):
     @abstractmethod
     def update(self, dt):
         """Update entity state """
-        pass
+        self._update_hitbox()
+        self._update_invulnerability(dt)
 
     @abstractmethod
     def take_damage(self, damage):

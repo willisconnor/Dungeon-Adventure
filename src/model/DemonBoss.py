@@ -1,11 +1,12 @@
-from src.model.DungeonEntity import Direction, AnimationState
+from src.model.DungeonEntity import Direction, AnimationState, DungeonEntity
 import pygame
 
 
-class DemonBoss:
+class DemonBoss(DungeonEntity):
     """Demon boss enemy class with specialized abilities"""
 
     def __init__(self, x, y):
+        super().__init__(x, y, 128, 128, "Demon Boss", 500, 500, 3)
         self.x = x
         self.y = y
         self.width = 128  # Assuming 128x128 sprite size
