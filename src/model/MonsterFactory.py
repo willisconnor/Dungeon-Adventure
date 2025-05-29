@@ -77,19 +77,19 @@ class DungeonMonsterFactory(MonsterFactory):
         raise ValueError(f"Factory method not implemented for {monster_type}")
 
     def _create_goblin(self) -> Goblin:
-        """Create a Goblin using your existing Goblin class"""
+        """Create a Goblin using  Goblin class"""
         return Goblin()
 
     def _create_skeleton(self) -> Skeleton:
-        """Create a Skeleton using your existing Skeleton class"""
+        """Create a Skeleton using Skeleton class"""
         return Skeleton()
 
     def _create_ogre(self) -> Ogre:
-        """Create an Ogre using your existing Ogre class"""
+        """Create an Ogre using Ogre class"""
         return Ogre()
 
     def _create_demon_boss(self, x: int, y: int) -> DemonBoss:
-        """Create a DemonBoss using your existing DemonBoss class"""
+        """Create a DemonBoss using DemonBoss class"""
         return DemonBoss(x, y)
 
     def get_supported_types(self) -> list[MonsterType]:
@@ -124,8 +124,7 @@ class DungeonMonsterFactory(MonsterFactory):
 
     def create_boss_monster(self, x: int = 0, y: int = 0) -> Union[Monster, DemonBoss]:
         """
-        Create a boss monster. Currently returns DemonBoss, but can be extended
-        to randomly select from multiple boss types in the future.
+        Create a boss monster. Currently returns DemonBoss
 
         Args:
             x: X coordinate for positioning
@@ -206,66 +205,9 @@ class MonsterSpawner:
         """
         monster = self.factory.create_monster(monster_type, x, y)
 
-        # For pygame-based monsters (like DemonBoss), position is set in constructor
-        # For Monster-based classes, we don't have position properties in your current implementation
-        # This is where each class handles what it should handle
 
         return monster
 
 
-# Example usage and demonstration
-def example_usage():
-    """Demonstrate how to use the MonsterFactory with your existing classes"""
 
-    # Create the factory
-    factory = DungeonMonsterFactory()
 
-    print("=== Monster Factory Demo ===")
-    print(f"Supported monster types: {[t.value for t in factory.get_supported_types()]}")
-
-    # Create specific monsters
-    print("\n--- Creating Specific Monsters ---")
-    goblin = factory.create_monster(MonsterType.GOBLIN)
-    print(f"Created: {goblin.name} (Health: {goblin.health}, Boss: {goblin.isBoss})")
-
-    skeleton = factory.create_monster(MonsterType.SKELETON)
-    print(f"Created: {skeleton.name} (Health: {skeleton.health}, Boss: {skeleton.isBoss})")
-
-    ogre = factory.create_monster(MonsterType.OGRE)
-    print(f"Created: {ogre.name} (Health: {ogre.health}, Boss: {ogre.isBoss})")
-
-    # DemonBoss needs coordinates
-    demon_boss = factory.create_monster(MonsterType.DEMON_BOSS, 100, 200)
-    print(f"Created: {demon_boss.name} at ({demon_boss.x}, {demon_boss.y}) (Health: {demon_boss.health})")
-
-    # Create random monsters
-    print("\n--- Creating Random Monsters ---")
-    random_monster = factory.create_random_monster(exclude_bosses=True)
-    print(f"Random monster: {random_monster.name} (Health: {random_monster.health})")
-
-    # Use spawner for encounters
-    print("\n--- Using Monster Spawner ---")
-    spawner = MonsterSpawner(factory)
-
-    easy_encounter = spawner.spawn_encounter_group(encounter_level=1)
-    print(f"Easy encounter: {len(easy_encounter)} monsters")
-    for monster in easy_encounter:
-        print(f"  - {monster.name}")
-
-    boss_encounter = spawner.spawn_encounter_group(encounter_level=3)
-    print(f"Boss encounter: {len(boss_encounter)} monsters")
-    for monster in boss_encounter:
-        monster_type = "Boss" if (hasattr(monster, 'isBoss') and monster.isBoss) or hasattr(monster,
-                                                                                            'enraged') else "Regular"
-        print(f"  - {monster.name} ({monster_type})")
-
-    return {
-        'goblin': goblin,
-        'skeleton': skeleton,
-        'ogre': ogre,
-        'demon_boss': demon_boss,
-        'encounters': {
-            'easy': easy_encounter,
-            'boss': boss_encounter
-        }
-    }
