@@ -61,7 +61,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             }
 
     def _load_frame_counts(self):
-        """load animiaton frame coutns from SQLite Database"""
+        """load animation frame coutns from SQLite Database"""
         conn = sqlite3.connect('game_data.db')
         c = conn.cursor()
 
