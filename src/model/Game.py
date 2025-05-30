@@ -3,6 +3,9 @@ Game.py - Main game class that manages the game state
 """
 import pygame
 from enum import Enum, auto
+
+from pygame.examples.scrap_clipboard import screen
+
 from src.model.knight import Knight
 from src.model.archer import Archer
 from src.model.cleric import Cleric
@@ -393,10 +396,10 @@ class Game:
 
     def _check_game_state(self):
         """Check for win/lose conditions"""
-        # Check if all heroes are dead
-        all_heroes_dead = all(not hero.is_alive for hero in self.heroes)
-        if all_heroes_dead:
-            self.state = GameState.GAME_OVER
+        # # Check if all heroes are dead
+        # all_heroes_dead = all(not hero.is_alive for hero in self.heroes)
+        # if all_heroes_dead:
+        #     self.state = GameState.GAME_OVER
 
         # Check if all enemies are dead
         all_enemies_dead = all(not enemy.is_alive for enemy in self.enemies)
@@ -405,6 +408,7 @@ class Game:
 
     def draw(self):
         """Draw everything to the screen"""
+        print("Draw method Called!")
         # Clear screen
         self.screen.fill(self.background_color)
 
