@@ -9,13 +9,14 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
 
     def __init__(self, x, y, hero_type = "default"):
         #We'll load specific stats from database
+        super().__init__(x, y, max_health=stats["max_health"], speed=stats["speed"], damage=stats["damage"])
         self.hero_type = hero_type
 
         #Load hero stats from database
         stats = self._load_hero_stats()
 
         #initialize with stats from databse
-        super().__init__(x,y, max_health = stats["max_health"], speed = stats["speed"], damage = stats["damage"])
+
         #add more to the above line if i wish to have more stats
 
         #Hero specific properties

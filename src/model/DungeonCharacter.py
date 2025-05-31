@@ -39,6 +39,7 @@ class DungeonCharacter(DungeonEntity):
 
     def take_damage(self, amount):
         """handles taking damage"""
+        # ------------test for negative parameter----------------
         if not self.is_alive or self.is_invulnerable:
             return False
 
@@ -104,3 +105,5 @@ class DungeonCharacter(DungeonEntity):
         #T H IS SHOUDL BE OVERRIDDEN IN CHILD CLASSES
         return 4 #defaulkt value, should be overridden
 
+#Add a __str__ method
+# __repr__ method?
