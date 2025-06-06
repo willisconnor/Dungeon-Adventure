@@ -8,8 +8,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict
 
 class Room:
-    """Room class with proper encapsulation - contains platforms, items, and room logic"""
-
+    """Room class - contains platforms, items, and room logic"""
     def __init__(self, room_id: int, width: int = SCREEN_WIDTH * 2, height: int = SCREEN_HEIGHT):
         self.__room_id = room_id
         self.__width = width
