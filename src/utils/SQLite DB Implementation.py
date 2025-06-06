@@ -1,68 +1,220 @@
 import sqlite3
+from sqlite3 import Error
 import os
-from DungeonEntity import AnimationState
+from src.model.DungeonEntity import AnimationState
+
+
+def create_connection(db_file):
+    """ Create a database connection to the SQLite database
+    :param db_file: database file
+    :return: Connection object or None
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(f"Error connecting to database: {e}")
+    return conn
+
+
+def create_table(conn, create_table_sql):
+    """ Create a table from the create_table_sql statement
+    :param conn: Connection object
+    :param create_table_sql: a CREATE TABLE SQL statement
+    :return: None
+    """
+    try:
+        c = conn.cursor()
+        c.execute(create_table_sql)
+    except Error as e:
+        print(f"Error creating table: {e}")
+
+
+def insert_data(conn, sql, data):
+    """ Insert data into the database
+    :param conn: Connection object
+    :param sql: INSERT SQL statement
+    :param data: Data to insert (tuple or list of tuples)
+    :return: None
+    """
+    try:
+        cur = conn.cursor()
+        if isinstance(data[0], tuple):
+            cur.executemany(sql, data)
+        else:
+            cur.execute(sql, data)
+        conn.commit()
+    except Error as e:
+        print(f"Error inserting data: {e}")
+
 
 def initialize_database():
-    """Create and initialize the game database with hero data"""
+    """Create and initialize the game database with hero and enemy data"""
 
-    #check if database already exists
-    if os.path.exists('game_data.db'):
-        print("Database already exists. Skipping initialization.")
+    db_file = 'game_data.db.sql'
+
+    # Check if database already exists and has data
+    if os.path.exists(db_file):
+        conn = create_connection(db_file)
+        if conn is not None:
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT count(*) FROM hero_stats")
+                has_data = cur.fetchone()[0] > 0
+
+                if has_data:
+                    print("Database already initialized with data. Skipping initialization.")
+                    conn.close()
+                    return
+            except:
+                # If table doesn't exist, we'll create it below
+                pass
+            conn.close()
+
+    # Create new database connection
+    conn = create_connection(db_file)
+    if conn is None:
+        print("Error! Cannot create the database connection.")
         return
 
-    #create a new databse
-    conn = sqlite3.connect('game_data.db')
-    c = conn.cursor()
+    # Try to import schema from SQL file
+    try:
+        # Try multiple possible locations for the SQL file
+        possible_paths = [
+            os.path.join('src', 'utils', 'game_data.db.sql'),
+            os.path.join('utils', 'game_data.db.sql'),
+            'game_data.db.sql'
+        ]
+        
+        sql_script = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                with open(path, 'r') as sql_file:
+                    sql_script = sql_file.read()
+                break
+        
+        if sql_script is None:
+            raise IOError("Could not find game_data.db.sql in any expected location")
+            
+        # Execute the SQL script
+        conn.executescript(sql_script)
+        print(f"Database schema created from SQL file successfully.")
+        
+    except (Error, IOError) as e:
+        print(f"Error importing SQL schema: {e}")
+        # Continue with fallback...
+        print("Falling back to manual table creation.")
 
-    #create hero stats table
-    c.execute('''
-    CREATE TABLE hero_stats (
-        hero_type TEXT PRIMARY KEY,
-        max_health INTEGER,
-        speed REAL,
-        damage INTEGER,
-        attack_range INTEGER,
-        special_cooldown INTEGER
-        )
-        ''')
+        # SQL to create hero stats table
+        hero_stats_table = '''
+                           CREATE TABLE hero_stats \
+                           ( \
+                               hero_type        TEXT PRIMARY KEY, \
+                               max_health       INTEGER, \
+                               speed            REAL, \
+                               damage           INTEGER, \
+                               attack_range     INTEGER, \
+                               special_cooldown INTEGER
+                           ) \
+                           '''
 
-    #create hero_animations table
-    c.execute('''
-    CREATE TABLE hero_animations
-    (
-        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        hero_type       TEXT,
-        animation_state INTEGER,
-        frame_count     INTEGER,
-        FOREIGN KEY (hero_type) REFERENCES hero_stats (hero_type)
-    )
-        ''')
+        # SQL to create hero animations table
+        hero_animations_table = '''
+                                CREATE TABLE hero_animations \
+                                ( \
+                                    id              INTEGER PRIMARY KEY AUTOINCREMENT, \
+                                    hero_type       TEXT, \
+                                    animation_state INTEGER, \
+                                    frame_count     INTEGER, \
+                                    FOREIGN KEY (hero_type) REFERENCES hero_stats (hero_type)
+                                ) \
+                                '''
 
-    #create hero sprites table
-    c.execute('''
-    CREATE TABLE hero_sprites
-    (
-        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        hero_type       TEXT,
-        animation_state INTEGER,
-        sprite_path     TEXT,
-        FOREIGN KEY (hero_type) REFERENCES hero_stats (hero_type)
-    )
-    ''')
+        # SQL to create hero sprites table
+        hero_sprites_table = '''
+                             CREATE TABLE hero_sprites \
+                             ( \
+                                 id              INTEGER PRIMARY KEY AUTOINCREMENT, \
+                                 hero_type       TEXT, \
+                                 animation_state INTEGER, \
+                                 sprite_path     TEXT, \
+                                 FOREIGN KEY (hero_type) REFERENCES hero_stats (hero_type)
+                             ) \
+                             '''
 
-    #insert hero stats ASK MOHAMMAD
+        # SQL to create enemy stats table
+        enemy_stats_table = '''
+                            CREATE TABLE enemy_stats \
+                            ( \
+                                enemy_type   TEXT PRIMARY KEY, \
+                                max_health   INTEGER, \
+                                speed        REAL, \
+                                damage       INTEGER, \
+                                attack_range INTEGER
+                            ) \
+                            '''
+
+        # SQL to create enemy animations table
+        enemy_animations_table = '''
+                                 CREATE TABLE enemy_animations \
+                                 ( \
+                                     id              INTEGER PRIMARY KEY AUTOINCREMENT, \
+                                     enemy_type      TEXT, \
+                                     animation_state INTEGER, \
+                                     frame_count     INTEGER, \
+                                     FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
+                                 ) \
+                                 '''
+
+        # SQL to create enemy sprites table
+        enemy_sprites_table = '''
+                              CREATE TABLE enemy_sprites \
+                              ( \
+                                  id              INTEGER PRIMARY KEY AUTOINCREMENT, \
+                                  enemy_type      TEXT, \
+                                  animation_state INTEGER, \
+                                  sprite_path     TEXT, \
+                                  FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
+                              ) \
+                              '''
+
+        # Create tables
+        tables = [
+            hero_stats_table,
+            hero_animations_table,
+            hero_sprites_table,
+            enemy_stats_table,
+            enemy_animations_table,
+            enemy_sprites_table
+        ]
+
+        for table in tables:
+            create_table(conn, table)
+
+    # Insert initial data
+    insert_initial_data(conn)
+
+    # Close connection
+    conn.close()
+    print("Database initialization completed successfully!")
+
+
+def insert_initial_data(conn):
+    """Insert initial data into the database tables"""
+    # Insert hero stats data
     hero_stats = [
-        #hero_type, max_health, speed, damage, attack_range, special_cooldown
-        ('knight', 150, 6, 10,90, 15.0), #tankier but slow with high melee dmg
-        ('cleric', 120, 7, 7, 75, 12.0), #Cleric is balanced
-        ('archer', 100, 8, 8, 150, 10.0) #archer is fgaster with longer range attack
+        # hero_type, max_health, speed, damage, attack_range, special_cooldown
+        ('knight', 150, 6, 10, 90, 15.0),  # tankier but slow with high melee dmg
+        ('cleric', 120, 7, 7, 75, 12.0),  # Cleric is balanced
+        ('archer', 100, 8, 8, 150, 10.0)  # archer is faster with longer range attack
     ]
 
-    c.executemany('INSERT INTO hero_stats VALUES (?,?,?,?,?,?)', hero_stats)
+    insert_data(conn, 'INSERT INTO hero_stats VALUES (?,?,?,?,?,?)', hero_stats)
 
-    #insert animation data for each hero
+    # Insert animation data for each hero
     animation_data = [
-        #knight animations
+        # knight animations
         ('knight', AnimationState.IDLE.value, 4),
         ('knight', AnimationState.WALKING.value, 8),
         ('knight', AnimationState.ATTACKING_1.value, 5),
@@ -70,42 +222,33 @@ def initialize_database():
         ('knight', AnimationState.ATTACKING_3.value, 4),
         ('knight', AnimationState.HURT.value, 2),
         ('knight', AnimationState.DEAD.value, 6),
-        #special skill block
         ('knight', AnimationState.SPECIAL_SKILL.value, 5),
 
-        #archer animations
+        # archer animations
         ('archer', AnimationState.IDLE.value, 9),
         ('archer', AnimationState.WALKING.value, 8),
-        #each attack is a shot
         ('archer', AnimationState.ATTACKING_1.value, 14),
         ('archer', AnimationState.ATTACKING_2.value, 14),
         ('archer', AnimationState.ATTACKING_3.value, 14),
         ('archer', AnimationState.HURT.value, 3),
         ('archer', AnimationState.DEAD.value, 5),
-        #Deflect special attack, define in hero class
         ('archer', AnimationState.SPECIAL_SKILL.value, 6),
-        #possibly store arrow sprite here
-        ('archer', AnimationState.Arrow.value, 1),
+        ('archer', AnimationState.ARROW.value, 1),
 
         # Cleric animations
         ('cleric', AnimationState.IDLE.value, 7),
         ('cleric', AnimationState.WALKING.value, 8),
         ('cleric', AnimationState.ATTACKING_1.value, 4),
         ('cleric', AnimationState.ATTACKING_2.value, 4),
-        #no attack 3
         ('cleric', AnimationState.HURT.value, 3),
         ('cleric', AnimationState.DEAD.value, 6),
-        #fireball by pitbull starts playing
         ('cleric', AnimationState.SPECIAL_SKILL.value, 8),
-        #store projectile sprites here?
         ('cleric', AnimationState.FIREBALL.value, 12)
     ]
 
-    c.executemany('INSERT INTO hero_animations VALUES (NULL,?,?,?)', animation_data)
+    insert_data(conn, 'INSERT INTO hero_animations VALUES (NULL,?,?,?)', animation_data)
 
-    #Insert sprite paths for each hero and animation state
-    #Format: hero_type, anmimation_state.value, sprite_path
-
+    # Insert sprite paths for each hero and animation state
     sprite_paths = [
         # Knight sprite paths
         ('knight', AnimationState.IDLE.value, 'assets/sprites/heroes/Knight_1/knight/Idle.png'),
@@ -114,11 +257,11 @@ def initialize_database():
         ('knight', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/Knight_1/knight/Attack 2.png'),
         ('knight', AnimationState.ATTACKING_3.value, 'assets/sprites/heroes/Knight_1/knight/Attack 3.png'),
         ('knight', AnimationState.HURT.value, 'assets/sprites/heroes/Knight_1/knight/Hurt.png'),
-        ('knight', AnimationState.DEAD.value, 'assets/sprites/heroes/knight/Knight_1/Dead.png'),
-        ('knight', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/knight/Knight_1/Defend.png'),
-        ('knight', AnimationState.RUNNING.value, 'assets/sprites/heroes/knight/Knight_1/Run.png'),
-        ('knight', AnimationState.JUMPING.value, 'assets/sprites/heroes/knight/Knight_1/Jump.png'),
-        ('knight', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png'),
+        ('knight', AnimationState.DEAD.value, 'assets/sprites/heroes/Knight_1/knight/Dead.png'),
+        ('knight', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/Knight_1/knight/Defend.png'),
+        ('knight', AnimationState.RUNNING.value, 'assets/sprites/heroes/Knight_1/knight/Run.png'),
+        ('knight', AnimationState.JUMPING.value, 'assets/sprites/heroes/Knight_1/knight/Jump.png'),
+        ('knight', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/Knight_1/knight/Run+Attack.png'),
 
         # Archer sprite paths
         ('archer', AnimationState.IDLE.value, 'assets/sprites/heroes/archer/Samurai_Archer/Walk.png'),
@@ -132,7 +275,6 @@ def initialize_database():
         ('archer', AnimationState.ARROW.value, 'assets/sprites/heroes/archer/Samurai_Archer/Arrow.png'),
         ('archer', AnimationState.RUNNING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Run.png'),
         ('archer', AnimationState.JUMPING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Jump.png'),
-        #('archer', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png'),
 
         # Cleric sprite paths
         ('cleric', AnimationState.IDLE.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Idle.png'),
@@ -145,47 +287,9 @@ def initialize_database():
         ('cleric', AnimationState.FIREBALL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Charge.png'),
         ('cleric', AnimationState.RUNNING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Run.png'),
         ('cleric', AnimationState.JUMPING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Jump.png'),
-        #('cleric', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png')
-
     ]
 
-    c.executemany('INSERT INTO hero_sprites VALUES (NULL,?,?,?)', sprite_paths)
-
-    #create enemy stats table
-    c.execute('''
-              CREATE TABLE enemy_stats
-              (
-                  enemy_type   TEXT PRIMARY KEY,
-                  max_health   INTEGER,
-                  speed        REAL,
-                  damage       INTEGER,
-                  attack_range INTEGER
-              )
-              ''')
-
-    # Create enemy animations table
-    c.execute('''
-              CREATE TABLE enemy_animations
-              (
-                  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                  enemy_type      TEXT,
-                  animation_state INTEGER,
-                  frame_count     INTEGER,
-                  FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
-              )
-              ''')
-
-    # Create enemy sprites table
-    c.execute('''
-              CREATE TABLE enemy_sprites
-              (
-                  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                  enemy_type      TEXT,
-                  animation_state INTEGER,
-                  sprite_path     TEXT,
-                  FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
-              )
-              ''')
+    insert_data(conn, 'INSERT INTO hero_sprites VALUES (NULL,?,?,?)', sprite_paths)
 
     # Insert enemy stats
     enemy_stats = [
@@ -198,9 +302,7 @@ def initialize_database():
         ('Gorgon_3', 100, 4, 10, 75)
     ]
 
-    #will need separate handling for boss demon thingy
-
-    c.executemany('INSERT INTO enemy_stats VALUES (?, ?, ?, ?, ?)', enemy_stats)
+    insert_data(conn, 'INSERT INTO enemy_stats VALUES (?, ?, ?, ?, ?)', enemy_stats)
 
     # Insert enemy animation data
     enemy_animation_data = []
@@ -216,7 +318,7 @@ def initialize_database():
             (enemy_type, AnimationState.DEAD.value, 1)
         ])
 
-    c.executemany('INSERT INTO enemy_animations VALUES (NULL, ?, ?, ?)', enemy_animation_data)
+    insert_data(conn, 'INSERT INTO enemy_animations VALUES (NULL, ?, ?, ?)', enemy_animation_data)
 
     # Insert enemy sprite paths
     enemy_sprite_paths = []
@@ -232,17 +334,113 @@ def initialize_database():
             (enemy_type, AnimationState.DEAD.value, f'assets/sprites/enemies/{enemy_type}/dead_sheet.png')
         ])
 
-    #Add boss sprite
+    insert_data(conn, 'INSERT INTO enemy_sprites VALUES (NULL, ?, ?, ?)', enemy_sprite_paths)
 
 
-    c.executemany('INSERT INTO enemy_sprites VALUES (NULL, ?, ?, ?)', enemy_sprite_paths)
+# Helper functions for retrieving data from the database
+def get_hero_stats(hero_type):
+    """Get stats for a specific hero type
+    :param hero_type: Type of hero (knight, archer, cleric)
+    :return: Dictionary with hero stats
+    """
+    conn = create_connection('game_data.db')
+    if conn is None:
+        return None
 
-    # Commit changes and close connection
-    conn.commit()
-    conn.close()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM hero_stats WHERE hero_type = ?", (hero_type,))
+        row = cur.fetchone()
 
-    print("Database initialization completed successfully!")
+        if row:
+            return {
+                'hero_type': row[0],
+                'max_health': row[1],
+                'speed': row[2],
+                'damage': row[3],
+                'attack_range': row[4],
+                'special_cooldown': row[5]
+            }
+        return None
+    except Error as e:
+        print(f"Error retrieving hero stats: {e}")
+        return None
+    finally:
+        conn.close()
 
 
-if __name__ == "__main__":
+def get_animation_data(entity_type, is_hero=True):
+    """Get animation data for a specific entity
+    :param entity_type: Type of entity (hero or enemy type)
+    :param is_hero: True if entity is a hero, False if enemy
+    :return: Dictionary with animation states and frame counts
+    """
+    conn = create_connection('game_data.db')
+    if conn is None:
+        return None
+
+    table = "hero_animations" if is_hero else "enemy_animations"
+    column = "hero_type" if is_hero else "enemy_type"
+
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT animation_state, frame_count FROM {table} WHERE {column} = ?",
+                    (entity_type,))
+        rows = cur.fetchall()
+
+        if rows:
+            return {row[0]: row[1] for row in rows}
+        return {}
+    except Error as e:
+        print(f"Error retrieving animation data: {e}")
+        return {}
+    finally:
+        conn.close()
+
+
+def get_sprite_path(entity_type, animation_state, is_hero=True):
+    """Get sprite path for a specific entity and animation state
+    :param entity_type: Type of entity (hero or enemy type)
+    :param animation_state: The animation state value
+    :param is_hero: True if entity is a hero, False if enemy
+    :return: Path to the sprite sheet
+    """
+    conn = create_connection('game_data.db')
+    if conn is None:
+        return None
+
+    table = "hero_sprites" if is_hero else "enemy_sprites"
+    column = "hero_type" if is_hero else "enemy_type"
+
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT sprite_path FROM {table} WHERE {column} = ? AND animation_state = ?",
+                    (entity_type, animation_state))
+        row = cur.fetchone()
+
+        if row:
+            return row[0]
+        return None
+    except Error as e:
+        print(f"Error retrieving sprite path: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__": # Initialize database
     initialize_database()
+
+    # Then test a query
+    hero = get_hero_stats("knight")
+    if hero:
+        print(f"Successfully retrieved knight data: {hero}")
+    else:
+        print("Failed to retrieve knight data")
+
+    # Test animation data retrieval
+    animations = get_animation_data("knight")
+    if animations:
+        print(f"Successfully retrieved knight animations: {animations}")
+    else:
+        print("Failed to retrieve knight animations")
