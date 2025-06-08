@@ -3,7 +3,7 @@ from src.model.DungeonEntity import DungeonEntity, AnimationState, Direction
 class DungeonCharacter(DungeonEntity):
     """Base character class for both hero and enemy, inherits from DungeonEntity"""
     def __init__(self, x, y,width, height, name, max_health, health, speed, damage, animation_state):
-        super().__init__(x, y, max_health)
+        super().__init__(x, y, width, height, name, max_health, health, speed, animation_state)
         self.speed = speed
         self.damage = damage
         self.width = width
@@ -15,7 +15,8 @@ class DungeonCharacter(DungeonEntity):
         self.last_animation_state = animation_state.IDLE
         self.last_direction = Direction.LEFT
         self.animation_counter = 0
-        self.speed = 0
+        self.frame_rates = {}
+
 
 
         #Animation properties
@@ -34,8 +35,8 @@ class DungeonCharacter(DungeonEntity):
         """Update entity state """
         self._update_hitbox()
         self._update_invulnerability(dt)
-        self.update_animation(dt)
-        self.update_attack_state(dt)
+        self._update_animation(dt)
+        self._update_attack_state(dt)
 
     def take_damage(self, amount):
         """handles taking damage"""

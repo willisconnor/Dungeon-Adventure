@@ -24,7 +24,7 @@ class ItemType(Enum):
 class Item:
     "Collectiblke items"
 
-    def __init__(self, x, y, item_type: ItemType, value: int -0):
+    def __init__(self, x, y, item_type: ItemType, value: int =0):
         self.x = x
         self.y = y
         self.item_type = item_type

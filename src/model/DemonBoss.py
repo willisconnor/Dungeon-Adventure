@@ -6,7 +6,7 @@ class DemonBoss(DungeonEntity):
     """Demon boss enemy class with specialized abilities"""
 
     def __init__(self, x, y):
-        super().__init__(x, y, 128, 128, "Demon Boss", 500, 500, 3)
+        super().__init__(x, y, 128, 128, "Demon Boss", 500, 500, 3, AnimationState)
         self.x = x
         self.y = y
         self.width = 128  # Assuming 128x128 sprite size
@@ -44,7 +44,7 @@ class DemonBoss(DungeonEntity):
         self.attack_cooldown = 0
         self.is_invulnerable = False
         self.invulnerable_timer = 0
-        self.hitbox = pygame.Rect(x, y, width=80, height=100)  # Smaller than sprite for better gameplay
+        self.hitbox = pygame.Rect(x, y, 80, 100)  # Smaller than sprite for better gameplay
         self.hit_targets = set()
 
         # Boss specific properties

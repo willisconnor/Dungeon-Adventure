@@ -2,9 +2,11 @@
 Game.py - Main game class that manages the game state
 """
 import pygame
+import os
 from enum import Enum, auto
 
-from pygame.examples.scrap_clipboard import screen
+
+
 
 from src.model.knight import Knight
 from src.model.archer import Archer
@@ -15,6 +17,7 @@ from src.model.Platform import PlatformManager, Platform
 from src.utils.SpriteSheetHandler import SpriteManager
 from src.model.DungeonEntity import Direction, AnimationState
 import random
+from src.model.RoomDungeonSystem import DungeonManager, Room, Direction, DoorPosition
 from src.model.tiles import *
 
 class HeroType(Enum):
@@ -53,6 +56,10 @@ class Game:
         self.projectile_manager = ProjectileManager()
         self.platform_manager = PlatformManager()
 
+        #initialize dungeon system
+        self.dungeon_manager = None
+        self.current_room = None
+
         # Game objects
         self.heroes = []
         self.enemies = []
@@ -69,8 +76,15 @@ class Game:
         self.selection_font = pygame.font.Font(None, 48)
         self.description_font = pygame.font.Font(None, 24)
 
+        #tileset
+
+        #debug
+        if not self.font:
+            print("ERROR! Fonts failed to initialize")
+
         # Input handling
         self.space_pressed = False
+        self.e_pressed = False
 
         # Level properties
         self.level_width = 2048  # Wider than screen for scrolling
@@ -123,6 +137,7 @@ class Game:
             #draw it all
             self.draw()
 
+
             #update display
             pygame.display.flip()
 
@@ -130,6 +145,14 @@ class Game:
 
     def _initialize_game(self):
         """Initialize or reset the game state"""
+        #get direcotyr where game.py is lcoated
+        game_dir = os.path.dirname(os.path.abspath(__file__))
+        #go up two levels
+        project_root = os.path.dirname(os.path.dirname(game_dir))
+        #built the full path to tmx file
+        tmx_path = os.path.join(project_root, "assets", "environment", "flat-tileset.tmx")
+
+
         # Clear existing objects
         self.heroes.clear()
         self.enemies.clear()
@@ -141,13 +164,17 @@ class Game:
         self.projectile_sprites.empty()
         self.platform_sprites.empty()
 
+        #initialize dungeon manager
+        self.dungeon_manager = DungeonManager((5,5), tmx_path)
+        self.current_room = self.dungeon_manager.get_current_room()
+
         #only proceed if hero has been selected
-        if not self.hero_selection_mode:
-            return
+        '''if not self.hero_selection_mode:
+            return'''
 
         #create only the selected hero
-        start_x = 400 # center of screen
-        start_y = 500
+        start_x = self.width //2 # center of screen
+        start_y = self.height //2
 
         if self.selected_hero_type == HeroType.KNIGHT:
             print("Key 1 pressed - selecting KNIGHT") #debug
@@ -162,28 +189,66 @@ class Game:
             return  # No hero selected
 
         # Add heroes to sprite groups
-        for hero in self.heroes:
-            self.all_sprites.add(hero)
-            self.hero_sprites.add(hero)
-            self.midground_sprites.add(hero)
-            self.damageable_sprites.add(hero)
+        self.all_sprites.add(hero)
+        self.hero_sprites.add(hero)
+        self.midground_sprites.add(hero)
+        self.damageable_sprites.add(hero)
+
+
+
 
             # Add enemies to sprite groups
-        for enemy in self.enemies:
-            self.all_sprites.add(enemy)
-            self.enemy_sprites.add(enemy)
-            self.midground_sprites.add(enemy)
-            self.damageable_sprites.add(enemy)
+        #for enemy in self.enemies:
+            #self.all_sprites.add(enemy)
+            #self.enemy_sprites.add(enemy)
+            #self.midground_sprites.add(enemy)
+            #self.damageable_sprites.add(enemy)
 
         self.heroes = [hero]
         self.active_hero = hero
         self.current_hero_index = 0
 
         #create enemies
-        self._spawn_enemies()
+        #self._spawn_enemies()
 
         #set the game state
         self.state = GameState.PLAYING
+
+
+    def _spawn_enemies_for_room(self, room: Room):
+        """spawn enemies for a specific room"""
+        #clear existing enemies
+        for enemy in self.enemies:
+            self.all_sprites.remove(enemy)
+            self.enemy_sprites.remove(enemy)
+            self.midground_sprites.remove(enemy)
+            self.damageable_sprites.remove(enemy)
+        self.enemies.clear()
+
+        if room.is_boss_room:
+            #spawn boss in center of room
+            boss = DemonBoss(room.width //2, room.height //2)
+            self.enemies.append(boss)
+            self.all_sprites.add(boss)
+            self.enemy_sprites.add(boss)
+            self.midground_sprites.add(boss)
+            self.damageable_sprites.add(boss)
+        elif not room.is_start_room:
+            #spawn 1-3 regular enemies
+            num_enemies = random.randint(1,3)
+            for i in range(num_enemies):
+                x = random.randint(100, room.width - 100)
+                y = random.randint(100, room.height - 100)
+                #create weaker enemies using demonboss as a palceholder
+                enemy = DemonBoss(x,y)
+                enemy.health = 50
+                enemy.max_health = 50
+                enemy.attack_damage = 5
+                self.enemies.append(enemy)
+                self.all_sprites.add(enemy)
+                self.enemy_sprites.add(enemy)
+                self.midground_sprites.add(enemy)
+                self.damageable_sprites.add(enemy)
 
 
     def _create_level_platforms(self):
@@ -210,12 +275,7 @@ class Game:
         one_way = Platform(700, 250, 150, 15, platform_type="one-way")
         self.platform_manager.add_platform(one_way)
 
-    def _spawn_enemies(self):
-        """Spawn enemies in the level"""
-        # For now, just spawn the demon boss
-        # In a full game, you'd load enemy data and spawn various types
-        boss = DemonBoss(1200, 400)
-        self.enemies.append(boss)
+
 
         # You could add more enemies here based on level design
         # Example: spawn some skeleton enemies when you implement them
@@ -230,16 +290,17 @@ class Game:
                     print("Key 1 pressed - selecting KNIGHT") #debug
                     self.selected_hero_type = HeroType.KNIGHT
                     self.hero_selection_made = True
-                    self.state = GameState.PLAYING
+                    self._initialize_game()
+                    #state is set to playing inside the init game
 
                 elif event.key == pygame.K_2:
                     self.selected_hero_type = HeroType.ARCHER
                     self.hero_selection_made = True
-                    self.state = GameState.PLAYING
+                    self._initialize_game()
                 elif event.key == pygame.K_3:
                     self.selected_hero_type = HeroType.CLERIC
                     self.hero_selection_made = True
-                    self.state = GameState.PLAYING
+                    self._initialize_game()
                 elif event.key == pygame.K_ESCAPE:
                     self.running = False
 
@@ -249,6 +310,8 @@ class Game:
                     self.state = GameState.PAUSED
                 elif event.key == pygame.K_SPACE:
                     self.space_pressed = True
+                elif event.key == pygame.K_e:
+                    self.e_pressed = True
 
             elif self.state == GameState.PAUSED:
                 if event.key == pygame.K_ESCAPE:
@@ -272,9 +335,52 @@ class Game:
     def update(self, dt, keys):
        """update game state"""
        if self.state == GameState.PLAYING:
-           # Update active hero input
+           #make sure the dungeon manager exists
+           if not self.dungeon_manager:
+               return
+
+           #get current room
+           self.current_room = self.dungeon_manager.get_current_room()
+
+           #spawn enemies for new room if needed
+       if not hasattr(self.current_room, '_enemies_spawned'):
+            self.current_room._enemies_spawned = True
+            self._spawn_enemies_for_room(self.current_room)
+
+            #update active hero input
             if self.active_hero and self.active_hero.is_alive:
-               self.active_hero.handle_input(keys, self.space_pressed)
+                self.active_hero.handle_input(keys, self.space_pressed)
+                self.active_hero.update(dt)
+
+                #check for door interaction with E key
+                if self.e_pressed:
+                    #try to eneter door
+                    if self.dungeon_manager.try_enter_door(self.active_hero.x, self.active_hero.y):
+                        #get door we just went thru
+                        for door in self.current_room.doors.values():
+                            if door.dest_room == self.dungeon_manager.current_room_pos:
+                                direction = door.direction
+                                break
+                        #position hero at opposite side of new room
+                        new_room = self.dungeon_manager.get_current_room()
+                        if direction == Direction.UP:
+                            self.active_hero.x = new_room.width // 2
+                            self.active_hero.y = new_room.height - 150
+                        elif direction == Direction.DOWN:
+                            self.active_hero.x = new_room.width // 2
+                            self.active_hero.y = 150
+                        elif direction == Direction.LEFT:
+                            self.active_hero.x = new_room.width - 150
+                            self.active_hero.y = new_room.height // 2
+                        elif direction == Direction.RIGHT:
+                            self.active_hero.x = 150
+                            self.active_hero.y = new_room.height // 2
+
+                        #mark that we need to spawn eenmies for new room
+                        new_room._enemies_spanwed = False
+                    #try to collect pillar
+                    if self.dungeon_manager.try_collect_pillar(self.active_hero.x, self.active_hero.y):
+                        print(f"Pillar collected! {self.dungeon_manager.pillars_collected}/5")
 
             # Update all sprites at once
             self.all_sprites.update(dt)
@@ -282,8 +388,8 @@ class Game:
             #handle collisions using sprite groups
             self._handle_collisions()
             # Update all heroes
-            for hero in self.heroes:
-               hero.update(dt)
+            #for hero in self.heroes:
+             #  hero.update(dt)
 
             # Check platform collisions for heroes
             #if hasattr(self.hero, 'is_falling'):
@@ -291,14 +397,12 @@ class Game:
 
             # Update enemies
             for enemy in self.enemies:
-               enemy.update(dt)
-
-               # Basic AI - move towards nearest hero
-               if enemy.is_alive and self.active_hero:
-                   enemy.move_towards_target(self.active_hero.x, self.active_hero.y, dt)
-
-                   # Try to attack if in range
-                   enemy.attack(self.active_hero)
+                if enemy.is_alive:
+                    enemy.update(dt)
+                    #basic ai
+                    if self.active_hero:
+                        enemy.move_towards_target(self.active_hero.x, self.active_hero.y, dt)
+                        enemy.attack(self.active_hero)
 
             #Update projectiles
             self.projectile_manager.update(dt)
@@ -322,44 +426,23 @@ class Game:
 
             # Reset space pressed state
             self.space_pressed = False
+            self.e_pressed = False
 
     def _handle_collisions(self):
         """Handle all collisions using sprite groups"""
         # Hero attacks vs enemies
-        for hero in self.hero_sprites:
-            if hero.is_attacking:
-                attack_hitbox = hero.get_attack_hitbox()
-                if attack_hitbox:
-                    # Check collision with all enemies
-                    for enemy in self.enemy_sprites:
-                        if enemy.is_alive and attack_hitbox.colliderect(enemy.hitbox):
-                            if enemy not in hero.hit_targets:
-                                damage = hero.calculate_damage(enemy)
-                                if enemy.take_damage(damage):
-                                    hero.hit_targets.add(enemy)
+        if self.active_hero and self.active_hero.is_attacking:
+            attack_hitbox = self.active_hero.get_attack_hitbox()
+            if attack_hitbox:
+                for enemy in self.enemies:
+                    if enemy.is_alive and attack_hitbox.colliderect(enemy.hitbox):
+                        if enemy not in self.active_hero.hit_targets:
+                            damage = self.active_hero.calculate_damage(enemy)
+                            if enemy.take_damage(damage):
+                                self.active_hero.hit_targets.add(enemy)
 
         # Projectile collisions
-        for projectile in self.projectile_sprites:
-            if projectile.active:
-                # Determine which group to check based on projectile owner
-                if projectile.owner in self.hero_sprites:
-                    targets = self.enemy_sprites
-                else:
-                    targets = self.hero_sprites
-
-                # Use sprite collision detection
-                hit_list = pygame.sprite.spritecollide(
-                    projectile, targets, False,
-                    collided=lambda p, t: p.hitbox.colliderect(t.hitbox) and t.is_alive
-                )
-
-                for target in hit_list:
-                    if target not in projectile.hit_targets:
-                        if target.take_damage(projectile.damage):
-                            projectile.hit_targets.add(target)
-                            if projectile.projectile_type == ProjectileType.ARROW:
-                                projectile.active = False
-                                break
+        hero_projectile_hits = self.projectile_manager.check_collisions(self.enemies)
 
         # Platform collisions for heroes
         for hero in self.hero_sprites:
@@ -396,60 +479,48 @@ class Game:
 
     def _check_game_state(self):
         """Check for win/lose conditions"""
-        # # Check if all heroes are dead
-        # all_heroes_dead = all(not hero.is_alive for hero in self.heroes)
-        # if all_heroes_dead:
-        #     self.state = GameState.GAME_OVER
+        # Check if hero is dead
+        if self.active_hero and not self.active_hero.is_alive:
+            self.state = GameState.GAME_OVER
 
-        # Check if all enemies are dead
-        all_enemies_dead = all(not enemy.is_alive for enemy in self.enemies)
-        if all_enemies_dead and self.enemies:  # Make sure we had enemies
-            self.state = GameState.VICTORY
+        # Check if boss is defeated in boss room
+        current_room = self.dungeon_manager.get_current_room()
+        if current_room.is_boss_room:
+            all_enemies_dead = all(not enemy.is_alive for enemy in self.enemies)
+            if all_enemies_dead and self.enemies:
+                self.dungeon_manager.defeat_boss()
+                if self.dungeon_manager.is_game_won():
+                    self.state = GameState.VICTORY
 
     def draw(self):
         """Draw everything to the screen"""
-        print("Draw method Called!")
+        print(f"Draw method Called! State: {self.state.name}") #debug
         # Clear screen
         self.screen.fill(self.background_color)
+
+        #test: draw white rectangle
+        pygame.draw.rect(self.screen, (255,255,255), (100,100,200,200))
 
         if self.state == GameState.HERO_SELECT:
             self._draw_hero_select()
         elif self.state == GameState.MENU:
             self._draw_menu()
         elif self.state == GameState.PLAYING:
-            # Create a temporary group for camera-adjusted drawing
-            visible_sprites = pygame.sprite.Group()
-
-            # Draw layers in order
-            for layer in [self.background_sprites, self.midground_sprites, self.foreground_sprites]:
-                for sprite in layer:
-                    # Check if sprite is visible on screen
-                    if (sprite.rect.right > self.camera_x and
-                            sprite.rect.left < self.camera_x + self.width and
-                            sprite.rect.bottom > self.camera_y and
-                            sprite.rect.top < self.camera_y + self.height):
-                        # Draw with camera offset
-                        self.screen.blit(
-                            sprite.image,
-                            (sprite.rect.x - self.camera_x, sprite.rect.y - self.camera_y)
-                        )
             self._draw_game()
             self._draw_ui()
-
         elif self.state == GameState.PAUSED:
-            self._draw_game()  # Draw game in background
+            self._draw_game() #in background
             self._draw_pause_overlay()
-
         elif self.state == GameState.GAME_OVER:
             self._draw_game_over()
-
         elif self.state == GameState.VICTORY:
             self._draw_victory()
+
 
     def _draw_hero_select(self):
         """Draw hero selection screen"""
         # Background
-        self.screen.fill((20, 20, 40))
+        self.screen.fill((20, 20, 40)) #make this a cool image mayhaps?
 
         # Title
         title_text = self.font.render("SELECT YOUR HERO", True, (255, 255, 255))
@@ -542,6 +613,114 @@ class Game:
 
     def _draw_game(self):
         """Draw the game world"""
+        tileset = pygame.image.load("assets\environment\old-dark-castle-interior-tileset.png").convert_alpha()
+        print("_draw_game called!")
+
+        if not self.current_room:
+            print("ERROR! No current room!")
+            return
+        #draw the current room
+        self.current_room.draw(self.screen, tileset, (self.camera_x, self.camera_y))
+
+        #draw enemies me muellerie enmieeeeee
+        for enemy in self.enemies:
+            if enemy.is_alive:
+                enemy_rect = pygame.Rect(
+                    enemy.x - self.camera_x,
+                    enemy.y - self.camera_y,
+                    enemy.width,
+                    enemy.height
+                )
+                #making enemies sqaures and not sprites
+                color = (200, 50, 50) if not enemy.is_invulnerable else (255, 150, 150)
+                pygame.draw.rect(self.screen, color, enemy_rect)
+
+                # Draw enemy health bar
+                health_percent = enemy.health / enemy.max_health
+                bar_width = enemy.width
+                bar_height = 5
+                bar_x = enemy.x - self.camera_x
+                bar_y = enemy.y - self.camera_y - 10
+
+                pygame.draw.rect(self.screen, (100, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+                pygame.draw.rect(self.screen, (0, 200, 0), (bar_x, bar_y, bar_width * health_percent, bar_height))
+
+        #draw heroes
+        for i, hero in enumerate(self.heroes):
+            if hero.is_alive:
+                # Get the current sprite based on animation state
+                current_sprite = self.sprite_manager.get_sprite(
+                    hero.hero_type,
+                    hero.animation_state,
+                    hero.current_frame
+                )
+                if current_sprite:
+                    # Calculate position
+                    screen_x = hero.x - self.camera_x
+                    screen_y = hero.y - self.camera_y
+
+                    # Draw sprite at hero position
+                    self.screen.blit(current_sprite, (screen_x, screen_y))
+                else:
+                    # Fallback to rect
+                    hero_rect = pygame.Rect(
+                        hero.x - self.camera_x,
+                        hero.y - self.camera_y,
+                        hero.width,
+                        hero.height
+                    )
+                    # Different colors for different heroes
+                    color = (50, 50, 200)  # Default blue
+                    if isinstance(hero, Knight):
+                        color = (150, 150, 200)
+                    elif isinstance(hero, Archer):
+                        color = (50, 200, 50)
+                    elif isinstance(hero, Cleric):
+                        color = (200, 50, 200)
+
+                    # Flash if invulnerable
+                    if not hero.is_invulnerable or int(hero.invulnerable_timer * 10) % 2:
+                        pygame.draw.rect(self.screen, color, hero_rect)
+
+                # Highlight active hero
+                if hero == self.active_hero:
+                    hero_rect = pygame.Rect(
+                        hero.x - self.camera_x,
+                        hero.y - self.camera_y,
+                        hero.width,
+                        hero.height
+                    )
+                    pygame.draw.rect(self.screen, (255, 255, 0), hero_rect, 3)
+
+                # Draw attack hitbox for debugging
+                if hero.is_attacking:
+                    attack_hitbox = hero.get_attack_hitbox()
+                    if attack_hitbox:
+                        debug_rect = pygame.Rect(
+                            attack_hitbox.x - self.camera_x,
+                            attack_hitbox.y - self.camera_y,
+                            attack_hitbox.width,
+                            attack_hitbox.height
+                        )
+                        pygame.draw.rect(self.screen, (255, 255, 0), debug_rect, 1)
+
+            # Draw projectiles
+        for projectile in self.projectile_manager.projectiles:
+            if projectile.active:
+                proj_rect = pygame.Rect(
+                    projectile.x - self.camera_x,
+                    projectile.y - self.camera_y,
+                    projectile.width,
+                    projectile.height
+                )
+
+                # Different colors for different projectile types
+                if projectile.projectile_type == ProjectileType.ARROW:
+                    color = (200, 200, 100)
+                else:  # Fireball
+                    color = (255, 100, 0)
+
+                pygame.draw.rect(self.screen, color, proj_rect)
         # Draw platforms
         for platform in self.platform_manager.platforms:
             if not platform.broken:
@@ -567,78 +746,6 @@ class Game:
 
         #DRAW FLOOR TILED
 
-        # Draw enemies
-        for enemy in self.enemies:
-            if enemy.is_alive:
-                # Simple rectangle representation for now
-                # In a full game, you'd use the sprite manager here
-                enemy_rect = pygame.Rect(
-                    enemy.x - self.camera_x,
-                    enemy.y - self.camera_y,
-                    enemy.width,
-                    enemy.height
-                )
-                color = (200, 50, 50) if not enemy.is_invulnerable else (255, 150, 150)
-                pygame.draw.rect(self.screen, color, enemy_rect)
-
-                # Draw enemy health bar
-                health_percent = enemy.health / enemy.max_health
-                bar_width = enemy.width
-                bar_height = 5
-                bar_x = enemy.x - self.camera_x
-                bar_y = enemy.y - self.camera_y - 10
-
-                pygame.draw.rect(self.screen, (100, 0, 0), (bar_x, bar_y, bar_width, bar_height))
-                pygame.draw.rect(self.screen, (0, 200, 0), (bar_x, bar_y, bar_width * health_percent, bar_height))
-
-        # Draw heroes, stopped here
-        for i, hero in enumerate(self.heroes):
-            if hero.is_alive:
-                #get the current sprite based on anim state
-                current_sprite = self.sprite_manager.get_sprite(
-                    hero.hero_type,
-                    hero.animation_state,
-                    hero.current_frame
-                )
-                if current_sprite:
-                    #calc pos
-                    screen_x = hero.x -self.camera_x
-                    screen_y = hero.y - self.camera_y
-
-                    #draw sprite at hero pos
-                    self.screen.blit(current_sprite,(screen_x, screen_y))
-
-                else:
-                    #fallback to rect
-                    hero_rect = pygame.Rect(
-                        hero.x - self.camera_x,
-                        hero.y - self.camera_y,
-                        hero.width,
-                        hero.height
-                    )
-
-
-
-                # Highlight active hero
-                if hero == self.active_hero:
-                    pygame.draw.rect(self.screen, (255, 255, 0), hero_rect, 3)
-
-                # Flash if invulnerable
-                if not hero.is_invulnerable or int(hero.invulnerable_timer * 10) % 2:
-                    pygame.draw.rect(self.screen, color, hero_rect)
-
-                # Draw attack hitbox for debugging
-                if hero.is_attacking:
-                    attack_hitbox = hero.get_attack_hitbox()
-                    if attack_hitbox:
-                        debug_rect = pygame.Rect(
-                            attack_hitbox.x - self.camera_x,
-                            attack_hitbox.y - self.camera_y,
-                            attack_hitbox.width,
-                            attack_hitbox.height
-                        )
-                        pygame.draw.rect(self.screen, (255, 255, 0), debug_rect, 1)
-
         # Draw projectiles
         for projectile in self.projectile_manager.projectiles:
             if projectile.active:
@@ -650,7 +757,6 @@ class Game:
                 )
 
                 # Different colors for different projectile types
-                from src.model.ProjectileManager import ProjectileType
                 if projectile.projectile_type == ProjectileType.ARROW:
                     color = (200, 200, 100)
                 else:  # Fireball
@@ -674,7 +780,7 @@ class Game:
         bar_width = 200
         bar_height = 20
 
-        # Background
+        # Background FLAG
         pygame.draw.rect(self.screen, (60, 60, 60), (bar_x, bar_y, bar_width, bar_height))
 
         # Health
@@ -698,6 +804,30 @@ class Game:
             cd_text = self.ui_font.render("Special (Q): Ready!", True, (0, 255, 0))
             self.screen.blit(cd_text, (10, 70))
 
+        #pillar counter
+        pillar_text = self.font.render(f"Pillars: {self.dungeon_manager.pillars_collected}/5", True, (255, 255, 0))
+        self.screen.blit(pillar_text, (self.width -200, 10))
+
+        #room status
+        current_room = self.dungeon_manager.get_current_room()
+        if current_room.is_boss_room:
+            boss_text = self.font.render("BOSS ROOM", True, (255, 0, 0))
+            boss_rect = boss_text.get_rect(center = (self.width //2, 50))
+            self.screen.blit(boss_text, boss_rect)
+
+        #check for boss door
+        for door in current_room.doors.values():
+            if door.dest_room:
+                dest_room = self.dungeon_manager.dungeon_grid[door.dest_room[0]][door.dest_room[1]]
+                if dest_room and dest_room.is_boss_room:
+                    if self.dungeon_manager.pillars_collected <5:
+                        lock_text = self.ui_font.render("Boss door locked - Collect all pillars!", True, (255, 100, 100))
+                    else:
+                        lock_text = self.ui_font.render("Boss door unlocked!", True, (100, 255, 100))
+                    lock_rect = lock_text.get_rect(center = (self.width //2, 80))
+                    self.screen.blit(lock_text, lock_rect)
+                    break
+
         # Controls reminder (bottom right)
         controls = [
             "A/D - Move",
@@ -712,6 +842,10 @@ class Game:
             text_rect = text.get_rect(right=self.width - 10, top=y_offset)
             self.screen.blit(text, text_rect)
             y_offset += 20
+
+        #debug info - room position
+        room_text = self.ui_font.render(f"Room: {current_room.grid_pos}", True, (100,100,100))
+        self.screen.blit(room_text, (10, self.height - 30))
 
     def _draw_pause_overlay(self):
         """Draw pause screen overlay"""

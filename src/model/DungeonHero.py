@@ -1,3 +1,5 @@
+import os
+
 from src.model.DungeonCharacter import DungeonCharacter
 from src.model.DungeonEntity import AnimationState, Direction
 import pygame
@@ -13,9 +15,30 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
 
         #Load hero stats from database
         stats = self._load_hero_stats()
+        self.frame_counts = self._load_frame_counts()
+        self.frames = self._load_all_frames()  # ← define below
+        self.frame_index = 0
+        self.animation_counter = 0
+        self.animation_speed = 0.15
+        self.current_frame = self.frames[self.animation_state][self.frame_index]
+        self.image = self.current_frame
+        self.rect = self.image.get_rect(topleft=(self.x, self.y))
+
+        width = 64
+        height = 64
+        name = hero_type.capitalize()
 
         #initialize with stats from databse
-        super().__init__(x,y, max_health = stats["max_health"], speed = stats["speed"], damage = stats["damage"])
+        super().__init__(
+            x, y,
+            width, height,
+            name,
+            stats["max_health"],
+            stats["max_health"],# health (current health)
+            stats["speed"],
+            stats["damage"],
+            AnimationState
+            )
         #add more to the above line if i wish to have more stats
         self.damage = stats["damage"]
         self.attack_range = stats["attack_range"]
@@ -47,6 +70,48 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.ground_y = self.y #this might cause issues
         self.on_ground = True
 
+    def _load_all_frames(self):
+        """Load all frames for each animation state from sprite sheets"""
+        conn = sqlite3.connect('game_data.db')
+        c = conn.cursor()
+
+        # Load all sprite paths
+        c.execute('''
+            SELECT animation_state, sprite_path
+            FROM hero_sprites
+            WHERE hero_type = ?
+        ''', (self.hero_type,))
+        sprite_path_rows = c.fetchall()
+        conn.close()
+
+        # Convert to dict: {AnimationState: path}
+        path_map = {
+            AnimationState(int(row[0])): row[1] for row in sprite_path_rows
+        }
+
+        frames = {}
+        for state in self.frame_counts:
+            path = path_map.get(state)
+            if not path or not os.path.exists(path):
+                # fallback placeholder
+                surf = pygame.Surface((64, 64))
+                surf.fill((255, 0, 255))
+                frames[state] = [surf]
+                continue
+
+            # Load and slice sprite sheet
+            sheet = pygame.image.load(path).convert_alpha()
+            frame_width = sheet.get_width() // self.frame_counts[state]
+            frame_height = sheet.get_height()
+
+            state_frames = [
+                sheet.subsurface(pygame.Rect(i * frame_width, 0, frame_width, frame_height))
+                for i in range(self.frame_counts[state])
+            ]
+            frames[state] = state_frames
+
+        return frames
+
     def _load_hero_stats(self):
         """Load hero stats from SQLite Database"""
         conn = sqlite3.connect('game_data.db')
@@ -55,7 +120,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         c.execute('''
             SELECT max_health, speed, damage, attack_range, special_cooldown
             FROM hero_stats
-            WHERE hero_type = ?''', (self.hero_type))
+            WHERE hero_type = ?''', (self.hero_type,))
 
         #need to make the db for this to work lol
         #also, can change this based on what stats we want
@@ -87,7 +152,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         c.execute('''
         SELECT animation_state, frame_count
         FROM hero_animations
-        WHERE hero_type = ?''', (self.hero_type))
+        WHERE hero_type = ?''', (self.hero_type,))
 
         results = c.fetchall()
         conn.close()
@@ -209,6 +274,16 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         #update animaiton state based on current actions
         if self.is_alive and not self.animation_state in [AnimationState.HURT, AnimationState.DYING, AnimationState.DEAD]:
             self._update_animation_state()
+
+        # Animation frame update
+        self.animation_counter += self.animation_speed
+        if self.animation_counter >= 1:
+            self.animation_counter = 0
+            self.frame_index = (self.frame_index + 1) % len(self.frames[self.animation_state])
+
+        self.current_frame = self.frames[self.animation_state][self.frame_index]
+        self.image = self.current_frame
+        self.rect.topleft = (self.x, self.y)
 
     def _update_animation_state(self):
         """update the current animation state based on hero actions"""

@@ -32,6 +32,8 @@ class AnimationState(Enum):
     #projectiles
     ARROW = auto()
     FIREBALL = auto()
+    DEFENDING = auto()
+    SPECIAL = auto()
 
 
 """Abstract class for Dungeon Entities, inherits from pygame.sprite.Sprite"""
