@@ -27,8 +27,14 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         height = 64
         name = hero_type.capitalize()
 
+        # DEBUG: Print what we're about to pass
+        print("About to call DungeonCharacter.__init__ with:")
+        print(f"x={x}, y={y}, width={width}, height={height}, name={name}")
+        print(f"max_health={stats['max_health']}, health={stats['max_health']}")
+        print(f"speed={stats['speed']}, damage={stats['damage']}")
+
         # Initialize parent class (sets self.x, self.y, etc.)
-        DungeonCharacter.__init__(
+        DungeonCharacter.__init__(self,
             x, y,
             width, height,
             name,
@@ -36,7 +42,6 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             stats["max_health"],  # current health
             stats["speed"],
             stats["damage"],
-            #AnimationState
         )
         self.hero_type = hero_type
 
