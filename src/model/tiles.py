@@ -14,7 +14,7 @@ class Tile(pygame.sprite.Sprite):
     def draw(self, surface):
         surface.blit(self.image, (self.rect.x, self.rect.y))
 
-class Tilemap():
+class TileMap():
     def __init__(self, filename, spritesheet):
         self.tile_size = 16
         self.start_x, self.start_y = 0, 0
