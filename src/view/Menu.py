@@ -519,50 +519,57 @@ class Menu:
         Args:
             game_class: The Game class to instantiate when starting a new game
         """
-        action = self.display()
-        
-        if action == "play":
-            # Start a new game
-            print("Starting game...")
-            print("Controls: ")
-            print("- A/D: Move left/right")
-            print("- SPACE: Attack")
-            print("- Q: Special ability")
-            print("- E: Defend")
-            print("- 1/2/3: Switch heroes")
-            print("- ESC: Pause")
+        while True:  # Add a loop to keep returning to the main menu
+            action = self.display()
             
-            game = game_class(self.__screen, self.__width, self.__height)
-            game.run()
-            
-        elif action == "load":
-            # Show load game menu
-            save_files = self.__game_state_manager.get_save_files()
-            load_menu = LoadMenu(self.__screen, self.__width, self.__height, save_files)
-            save_name = load_menu.display()
-            
-            if save_name:
-                # Load the selected save file
-                game_state = self.__game_state_manager.load_game(save_name)
+            if action == "play":
+                # Start a new game
+                print("Starting game...")
+                print("Controls: ")
+                print("- A/D: Move left/right")
+                print("- SPACE: Attack")
+                print("- Q: Special ability")
+                print("- E: Defend")
+                print("- 1/2/3: Switch heroes")
+                print("- ESC: Pause")
                 
-                if game_state:
-                    # Create game and load state
-                    game = game_class(self.__screen, self.__width, self.__height)
+                game = game_class(self.__screen, self.__width, self.__height)
+                game.run()
+                # After game ends or is paused, we'll return to main menu
+                
+            elif action == "load":
+                # Show load game menu
+                save_files = self.__game_state_manager.get_save_files()
+                load_menu = LoadMenu(self.__screen, self.__width, self.__height, save_files)
+                save_name = load_menu.display()
+                
+                if save_name:
+                    # Load the selected save file
+                    game_state = self.__game_state_manager.load_game(save_name)
                     
-                    # Check if the Game class has a load_game_state method
-                    if hasattr(game, 'load_game_state'):
-                        if game.load_game_state(game_state):
-                            print(f"Loaded game: {save_name}")
-                            game.run()
+                    if game_state:
+                        # Create game and load state
+                        game = game_class(self.__screen, self.__width, self.__height)
+                        
+                        # Check if the Game class has a load_game_state method
+                        if hasattr(game, 'load_game_state'):
+                            if game.load_game_state(game_state):
+                                print(f"Loaded game: {save_name}")
+                                game.run()
+                            else:
+                                print(f"Failed to load game: {save_name}")
+                                # We'll continue the loop to show main menu again
                         else:
-                            print(f"Failed to load game: {save_name}")
-                            # If loading fails, go back to menu
-                            self.start_game(game_class)
+                            # If no load_game_state method, just run the game
+                            print(f"Game loaded, but no load_game_state method found")
+                            game.run()
                     else:
-                        # If no load_game_state method, just run the game
-                        print(f"Game loaded, but no load_game_state method found")
-                        game.run()
-                else:
-                    print(f"Failed to load save file: {save_name}")
-                    # If loading fails, go back to menu
-                    self.start_game(game_class)
+                        print(f"Failed to load save file: {save_name}")
+                        # Continue loop to show main menu again
+                # If save_name is None (back button clicked), we'll just continue the loop
+                # to show main menu again
+                
+            elif action == "exit":
+                # Exit the game and break the loop
+                pygame.quit()
+                sys.exit()
