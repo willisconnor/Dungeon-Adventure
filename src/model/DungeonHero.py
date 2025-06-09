@@ -10,13 +10,35 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
     """Base Hero class that all hero types will inherit from"""
 
     def __init__(self, x, y, hero_type = "default"):
-        #We'll load specific stats from database
+        # Set basic hero info
         self.hero_type = hero_type
 
-        #Load hero stats from database
+        # Set animation state early — required for frame loading
+        self.animation_state = AnimationState.IDLE
+        self.last_animation_state = AnimationState.IDLE
+
+        # Load stats from database
         stats = self._load_hero_stats()
+
+        width = 64
+        height = 64
+        name = hero_type.capitalize()
+
+        # Initialize parent class (sets self.x, self.y, etc.)
+        super().__init__(
+            x, y,
+            width, height,
+            name,
+            stats["max_health"],
+            stats["max_health"],  # current health
+            stats["speed"],
+            stats["damage"],
+            AnimationState
+        )
+
+        # Load animations after base init (self.x, self.y now exist)
         self.frame_counts = self._load_frame_counts()
-        self.frames = self._load_all_frames()  # ← define below
+        self.frames = self._load_all_frames()
         self.frame_index = 0
         self.animation_counter = 0
         self.animation_speed = 0.15
@@ -24,36 +46,21 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.image = self.current_frame
         self.rect = self.image.get_rect(topleft=(self.x, self.y))
 
-        width = 64
-        height = 64
-        name = hero_type.capitalize()
-
-        #initialize with stats from databse
-        super().__init__(
-            x, y,
-            width, height,
-            name,
-            stats["max_health"],
-            stats["max_health"],# health (current health)
-            stats["speed"],
-            stats["damage"],
-            AnimationState
-            )
-        #add more to the above line if i wish to have more stats
+        # Hero-specific stats
         self.damage = stats["damage"]
         self.attack_range = stats["attack_range"]
-        #self.special_cooldown = stats["special_cooldown"]
+        self.special_cooldown = stats["special_cooldown"]
 
-        #Hero specific properties
+        # Hero state flags
         self.is_moving = False
         self.is_defending = False
-        self.can_input = True # to prevent multiple attacks from a single keypress
+        self.can_input = True
 
-        #special ability related properties
-        self.special_cooldown = stats["special_cooldown"]
+        # Special ability state
         self.special_cooldown_remaining = 0
         self.using_special = False
 
+        # Attack state
         self.is_attacking = False
         self.attack_timer = 0
         self.attack_combo = 0
@@ -61,13 +68,13 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.attack_window = 0
         self.hit_targets = set()
 
-        #movement extension properties
+        # Movement/physics state
         self.is_jumping = False
         self.is_falling = False
         self.jump_velocity = 15
         self.y_velocity = 0
         self.gravity = 0.8
-        self.ground_y = self.y #this might cause issues
+        self.ground_y = self.y
         self.on_ground = True
 
     def _load_all_frames(self):

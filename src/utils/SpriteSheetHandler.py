@@ -13,11 +13,12 @@ class SpriteSheet:
             filename: The path to the spritesheet image file
         """
         # Load the spritesheet image
-        try:
+        if not os.path.exists(filename):
+            print(f"Warning: Missing sprite file: {filename}")
+            self.sheet = pygame.Surface((128, 128), pygame.SRCALPHA)
+            self.sheet.fill((255, 0, 255))  # Magenta error tile
+        else:
             self.sheet = pygame.image.load(filename).convert_alpha()
-        except pygame.error as e:
-            print(f"Unable to load spritesheet image: {filename}")
-            raise SystemExit(e)
 
         # Get the dimensions of the spritesheet
         self.sheet_width = self.sheet.get_width()
@@ -176,4 +177,10 @@ class SpriteManager:
             return result[0]
         else:
             # Default path if not found in database
-            return f"assets/sprites/{hero_type}/{animation_state.name.lower()}.png"
+            folder_map = {
+                "knight": "Knight_1",
+                "archer": "Samurai_Archer",
+                "cleric": "Fire_Cleric"
+            }
+            subfolder = folder_map.get(hero_type, "Default")
+            return f"assets/sprites/heroes/{hero_type}/{subfolder}/{animation_state.name.capitalize()}.png"

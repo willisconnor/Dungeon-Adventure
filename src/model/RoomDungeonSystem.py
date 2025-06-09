@@ -27,13 +27,20 @@ class DoorPosition:
 
 class Room:
     """represents a single room"""
-    def __init__(self, grid_pos: Tuple[int, int], tile_data: List[List[int]], tile_width: int = 16, tile_height: int = 16):
+    def __init__(self, grid_pos: Tuple[int, int], tile_data: List[List[int]] = None, tile_width: int = 16, tile_height: int = 16):
         self.grid_pos = grid_pos #row col
         self.tile_data = tile_data
         self.tile_width = tile_width
         self.tile_height = tile_height
-        self.width = len(tile_data[0]) * tile_width
-        self.height = len(tile_data) * tile_height
+        self.width = 1600
+        self.height = 600 #2x screen
+
+        if tile_data is None:
+            self._generate_room_layout()
+        else:
+            self.tile_data = tile_data
+            self.width = len(tile_data[0]) * tile_width
+            self.height = len(tile_data[1]) * tile_height
 
         self.doors: Dict[Direction, DoorPosition] = {}
         self.has_pillar = False
@@ -42,13 +49,51 @@ class Room:
         self.is_boss_room = False
         self.is_start_room = False
 
-        #Door positions, adjust if  change tilemap
+        #Door positions, adjust if  change tilemap. updated for larger size rooms
         self.door_positions = {
-            Direction.UP: (self.width // 2- 16, 0),
-            Direction.DOWN: (self.width // 2-16, self.height -32),
-            Direction.LEFT: (0, self.height // 2-16),
-            Direction.RIGHT: (self.width -32, self.height //2 -16)
+            Direction.UP: (self.width // 2- 16, 16),
+            Direction.DOWN: (self.width // 2-16, self.height -48),
+            Direction.LEFT: (16, self.height // 2-16),
+            Direction.RIGHT: (self.width -48, self.height //2 -16)
         }
+
+
+    def _generate_room_layout(self):
+        """generate tile data for a larger room"""
+        tiles_wide = self.width //self.tile_width # 50 tiles wide
+        tiles_high = self.height //self.tile_height
+        #create empty room
+        self.tile_data = [[0 for _ in range(tiles_wide)]for _ in range (tiles_high)]
+
+        #calculat the correc ttile ID's for the ones i want
+        #tileset is 52 tiles wide 832/16
+        tiles_per_row = 52
+
+        #floor tile ids (i want 31-32, 10-13
+        floor_tiles = []
+        for row in range(10, 14):
+            for col in range(31, 33):
+                tile_id = (row * tiles_per_row) + col+1
+                floor_tiles.append(tile_id)
+        #this gives me 604, 656, 657, 708, 709
+
+
+        #add floor tiles assuming tile id 1 is floor
+        floor_y = tiles_high -4 #floor 5 tiles from bot
+        for x in range(tiles_wide):
+            for y in range(floor_y, tiles_high):
+                self.tile_data[y][x] = random.choice([553, 554, 605, 606]) #use appropriate floor tile id
+
+
+        #add walls on sides from diff part of tileset
+        wall_tile = 55
+        for y in range(tiles_high):
+            self.tile_data[y][0] = wall_tile
+            self.tile_data[y][tiles_wide-1] = wall_tile
+
+        #add ceiling
+        for x in range(tiles_wide):
+            self.tile_data[0][x] = wall_tile #celing
 
     def add_door(self, direction: Direction, dest_room: Tuple[int, int]):
         """add a door in the specified direction"""
@@ -80,8 +125,16 @@ class Room:
 
     def draw(self, screen: pygame.Surface, tileset: pygame.Surface, camera_offset: Tuple[int, int] = (0,0)):
         """draw room tiles"""
-        for y, row in enumerate(self.tile_data):
-            for x, tile_id in enumerate(row):
+
+        #draw only visible tiles
+        start_x = max(0, int(camera_offset[0] // self.tile_width))
+        start_y = max(0, int(camera_offset[1] // self.tile_height))
+        end_x = min(len(self.tile_data[0]), start_x + (screen.get_width()// self.tile_width) + 2)
+        end_y = min(len(self.tile_data), start_y + (screen.get_height() // self.tile_height) + 2)
+
+        for y in range(start_y, end_y):
+            for x in range(start_x, end_x):
+                tile_id = self.tile_data[y][x]
                 if tile_id >0: #0 is empty tile
                     #calc tile position in set
                     tileset_width = tileset.get_width() // self.tile_width
@@ -112,11 +165,11 @@ class DungeonManager:
         self.dungeon_grid: List[List[Optional[Room]]] = [[None for _ in range(self.grid_width)] for _ in range(self.grid_height)]
         self.current_room_pos: Tuple[int, int] = None
         self.tmx_file = tmx_file
-        self.pillars_collected = False
+        self.pillars_collected = 0
         self.boss_defeated = False
 
         #load base templaate from TMX
-        self.base_tile_data = self._load_tmx_data(tmx_file)
+        #self.base_tile_data = self._load_tmx_data(tmx_file)
 
         #generate dungeon
         self._generate_dungeon()
@@ -152,8 +205,8 @@ class DungeonManager:
         start_pos = (self.grid_height // 2, self.grid_width //2)
         self.current_room_pos = start_pos
 
-        #generate starting room
-        start_room = Room(start_pos, self.base_tile_data)
+        #generate starting room WITHOUT tmx data?
+        start_room = Room(start_pos, None)
         start_room.is_start_room = True
         self.dungeon_grid[start_pos[0]][start_pos[1]] = start_room
 
@@ -184,7 +237,7 @@ class DungeonManager:
                 #check bounds
                 if (0 <= new_pos[0] < self.grid_height and 0 <= new_pos[1] < self.grid_width):
                     #create new room or connect to existing rewm
-                    new_room = Room(new_pos, self.base_tile_data)
+                    new_room = Room(new_pos, None)
                     self.dungeon_grid[new_pos[0]][new_pos[1]] = new_room
                     created_rooms.add(new_pos)
                     rooms_to_process.append(new_pos)

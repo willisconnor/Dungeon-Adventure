@@ -114,6 +114,10 @@ class Game:
         self.damageable_sprites = pygame.sprite.Group()  # Everything that can take damage
         self.solid_sprites = pygame.sprite.Group()  # Platforms and walls
 
+        #load tileset
+        tileset_path = "assets/environment/old-dark-castle-interior-tileset.png"
+        self.tileset = pygame.image.load(tileset_path).convert_alpha()
+
     def run(self):
         """main game loop"""
         self.running = True
@@ -173,8 +177,13 @@ class Game:
             return'''
 
         #create only the selected hero
-        start_x = self.width //2 # center of screen
-        start_y = self.height //2
+        if self.current_room:
+            start_x = self.current_room.width //4 # center of screen
+            #start_y = self.current_room.height - 150
+            tiles_high = self.current_room.height//self.current_room.tile_height
+            floor_y_pixels = (tiles_high -4) * self.current_room.tile_height
+            start_y = floor_y_pixels -140
+
 
         if self.selected_hero_type == HeroType.KNIGHT:
             print("Key 1 pressed - selecting KNIGHT") #debug
@@ -377,7 +386,7 @@ class Game:
                             self.active_hero.y = new_room.height // 2
 
                         #mark that we need to spawn eenmies for new room
-                        new_room._enemies_spanwed = False
+                        new_room._enemies_spawned = False
                     #try to collect pillar
                     if self.dungeon_manager.try_collect_pillar(self.active_hero.x, self.active_hero.y):
                         print(f"Pillar collected! {self.dungeon_manager.pillars_collected}/5")
@@ -464,18 +473,19 @@ class Game:
 
     def _update_camera(self):
         """Update camera position to follow active hero"""
-        if self.active_hero:
+        if self.active_hero and self.current_room:
             # Center camera on hero with some boundaries
             target_x = self.active_hero.x - self.width // 2
-            target_y = self.active_hero.y - self.height // 2
+            #target_y = self.active_hero.y - self.height // 2
 
             # Smooth camera movement
             self.camera_x += (target_x - self.camera_x) * 0.1
-            self.camera_y += (target_y - self.camera_y) * 0.1
+            #self.camera_y += (target_y - self.camera_y) * 0.1
 
             # Clamp camera to level boundaries
-            self.camera_x = max(0, min(self.camera_x, self.level_width - self.width))
-            self.camera_y = max(0, min(self.camera_y, self.level_height - self.height))
+            self.camera_x = max(0, min(self.camera_x, self.current_room.width - self.width))
+            #self.camera_y = max(0, min(self.camera_y, self.current_room.height - self.height))
+            self.camera_y = 0
 
     def _check_game_state(self):
         """Check for win/lose conditions"""
@@ -499,7 +509,7 @@ class Game:
         self.screen.fill(self.background_color)
 
         #test: draw white rectangle
-        pygame.draw.rect(self.screen, (255,255,255), (100,100,200,200))
+        #pygame.draw.rect(self.screen, (255,255,255), (100,100,200,200))
 
         if self.state == GameState.HERO_SELECT:
             self._draw_hero_select()
@@ -613,14 +623,14 @@ class Game:
 
     def _draw_game(self):
         """Draw the game world"""
-        tileset = pygame.image.load("assets\environment\old-dark-castle-interior-tileset.png").convert_alpha()
+        #tileset = pygame.image.load("assets\environment\old-dark-castle-interior-tileset.png").convert_alpha()
         print("_draw_game called!")
 
         if not self.current_room:
             print("ERROR! No current room!")
             return
         #draw the current room
-        self.current_room.draw(self.screen, tileset, (self.camera_x, self.camera_y))
+        self.current_room.draw(self.screen, self.tileset, (self.camera_x, self.camera_y))
 
         #draw enemies me muellerie enmieeeeee
         for enemy in self.enemies:
@@ -652,7 +662,7 @@ class Game:
                 current_sprite = self.sprite_manager.get_sprite(
                     hero.hero_type,
                     hero.animation_state,
-                    hero.current_frame
+                    hero.frame_index
                 )
                 if current_sprite:
                     # Calculate position
