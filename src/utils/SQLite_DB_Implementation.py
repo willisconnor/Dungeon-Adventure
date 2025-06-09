@@ -113,7 +113,7 @@ def initialize_database():
         ('knight', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/Knight_1/knight/Attack 1.png'),
         ('knight', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/Knight_1/knight/Attack 2.png'),
         ('knight', AnimationState.ATTACKING_3.value, 'assets/sprites/heroes/Knight_1/knight/Attack 3.png'),
-        ('knight', AnimationState.HURT.value, 'assets/sprites/heroes/knight/Knight_1/Hurt.png'),
+        ('knight', AnimationState.HURT.value, 'assets/sprites/heroes/Knight_1/knight/Hurt.png'),
         ('knight', AnimationState.DEAD.value, 'assets/sprites/heroes/knight/Knight_1/Dead.png'),
         ('knight', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/knight/Knight_1/Defend.png'),
         ('knight', AnimationState.RUNNING.value, 'assets/sprites/heroes/knight/Knight_1/Run.png'),
