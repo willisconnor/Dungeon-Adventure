@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 #print(dir(src.model))
 from src.model.Game import Game, GameState
+from src.model.tiles import *
 
 
 
