@@ -1,4 +1,7 @@
 #class to handle room generation
+'''Connor Willis
+6/5/25
+'''
 from typing import List, Dict, Tuple, Optional
 import random
 import xml.etree.ElementTree as ET

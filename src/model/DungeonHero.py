@@ -4,12 +4,15 @@ from src.model.DungeonCharacter import DungeonCharacter
 from src.model.DungeonEntity import AnimationState, Direction
 import pygame
 import sqlite3
-'''Connor Willis
+'''Connor Willis corndog
 '''
 class Hero(DungeonCharacter, pygame.sprite.Sprite):
     """Base Hero class that all hero types will inherit from"""
 
     def __init__(self, x, y, hero_type = "default"):
+        #initialize pygame.sprite.Sprite first
+        pygame.sprite.Sprite.__init__(self)
+
         # Set basic hero info
         self.hero_type = hero_type
 
@@ -24,8 +27,14 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         height = 64
         name = hero_type.capitalize()
 
+        # DEBUG: Print what we're about to pass
+        print("About to call DungeonCharacter.__init__ with:")
+        print(f"x={x}, y={y}, width={width}, height={height}, name={name}")
+        print(f"max_health={stats['max_health']}, health={stats['max_health']}")
+        print(f"speed={stats['speed']}, damage={stats['damage']}")
+
         # Initialize parent class (sets self.x, self.y, etc.)
-        super().__init__(
+        DungeonCharacter.__init__(self,
             x, y,
             width, height,
             name,
@@ -33,8 +42,8 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             stats["max_health"],  # current health
             stats["speed"],
             stats["damage"],
-            AnimationState
         )
+        self.hero_type = hero_type
 
         # Load animations after base init (self.x, self.y now exist)
         self.frame_counts = self._load_frame_counts()
@@ -42,8 +51,8 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.frame_index = 0
         self.animation_counter = 0
         self.animation_speed = 0.15
-        self.current_frame = self.frames[self.animation_state][self.frame_index]
-        self.image = self.current_frame
+        self.current_sprite = self.frames[self.animation_state][self.frame_index]
+        self.image = self.current_sprite
         self.rect = self.image.get_rect(topleft=(self.x, self.y))
 
         # Hero-specific stats
@@ -97,25 +106,53 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         }
 
         frames = {}
+        frame_counts = self.get_frame_counts()
+
         for state in self.frame_counts:
             path = path_map.get(state)
             if not path or not os.path.exists(path):
-                # fallback placeholder
-                surf = pygame.Surface((64, 64))
-                surf.fill((255, 0, 255))
+                # Create a simple colored rectangle instead of pink
+                surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+
+                # Different colors for different hero types
+                if self.hero_type == "knight":
+                    surf.fill((100, 100, 200))  # Blue
+                elif self.hero_type == "archer":
+                    surf.fill((100, 200, 100))  # Green
+                elif self.hero_type == "cleric":
+                    surf.fill((200, 100, 100))  # Red
+                else:
+                    surf.fill((150, 150, 150))  # Gray
+
                 frames[state] = [surf]
                 continue
 
-            # Load and slice sprite sheet
-            sheet = pygame.image.load(path).convert_alpha()
-            frame_width = sheet.get_width() // self.frame_counts[state]
-            frame_height = sheet.get_height()
+            # Try to load and slice sprite sheet
+            try:
+                sheet = pygame.image.load(path).convert_alpha()
+                frame_count = frame_counts[state]
+                frame_width = sheet.get_width() // frame_count
+                frame_height = sheet.get_height()
 
-            state_frames = [
-                sheet.subsurface(pygame.Rect(i * frame_width, 0, frame_width, frame_height))
-                for i in range(self.frame_counts[state])
-            ]
-            frames[state] = state_frames
+                state_frames = [
+                    sheet.subsurface(pygame.Rect(i * frame_width, 0, frame_width, frame_height))
+                    for i in range(frame_count)
+                ]
+
+                frames[state] = state_frames
+            except (pygame.error, FileNotFoundError):
+                # Fallback if sprite loading fails
+                surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+                hero_type = self.hero_type
+                if self.hero_type == "knight":
+                    surf.fill((100, 100, 200))
+                elif self.hero_type == "archer":
+                    surf.fill((100, 200, 100))
+                elif self.hero_type == "cleric":
+                    surf.fill((200, 100, 100))
+                else:
+                    surf.fill((150, 150, 150))
+                frames[state] = [surf]
 
         return frames
 
@@ -423,3 +460,44 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             return result[0]
         else:
             return f"assets/sprites/{self.hero_type}/{animation_state.name.lower()}.png"
+
+    """
+    setters/getters
+    """
+
+    def get_hero_type(self):
+        """Get hero type"""
+        return self.hero_type
+
+    def get_attack_range(self):
+        """Get attack range"""
+        return self.attack_range
+
+    def get_current_sprite(self):
+        """Get current sprite surface"""
+        return getattr(self, 'current_sprite', None)
+
+    def set_current_sprite(self, sprite):
+        """Set current sprite surface"""
+        self.current_sprite = sprite
+
+    def get_frames(self):
+        """Get frames dictionary"""
+        return self.frames
+
+    def get_frame_counts(self):
+        """Get frame counts dictionary"""
+        return self.frame_counts
+
+    # Override parent methods to fix naming conflicts
+    def is_attacking(self):
+        """Check if character is currently attacking"""
+        return self.is_attacking  # The attribute, not the method
+
+    def is_using_special(self):
+        """Check if character is using special ability"""
+        return self.using_special
+
+    def is_alive(self):
+        """Check if character is alive"""
+        return self.is_alive  # The attribute
