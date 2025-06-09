@@ -56,7 +56,7 @@ class DungeonCharacter:
         # Animation
         self.animation_state = AnimationState.IDLE
         self.last_animation_state = AnimationState.IDLE
-        self.current_frame = 0
+        self.current_frame_index = 0
         self.animation_timer = 0
         self.animation_speed = 0.1  # Seconds per frame
     
@@ -92,10 +92,10 @@ class DungeonCharacter:
         self.animation_timer += dt
         if self.animation_timer >= self.animation_speed:
             self.animation_timer = 0
-            self.current_frame += 1
+            self.current_frame_index += 1
             # Reset frame if we've reached the end (assuming 4 frames per animation)
-            if self.current_frame >= 4:
-                self.current_frame = 0
+            if self.current_frame_index >= 4:
+                self.current_frame_index = 0
                 
                 # If this was a one-time animation (like attacking), go back to idle
                 if self.animation_state in [AnimationState.ATTACKING_1, AnimationState.ATTACKING_2, 
@@ -178,7 +178,7 @@ class DungeonCharacter:
         else:  # attack_combo == 3
             self.animation_state = AnimationState.ATTACKING_3
         
-        self.current_frame = 0
+        self.current_frame_index = 0
         return True
     
     def use_special_ability(self):
@@ -189,7 +189,7 @@ class DungeonCharacter:
         self.using_special = True
         self.special_cooldown_remaining = self.special_cooldown
         self.animation_state = AnimationState.SPECIAL_SKILL
-        self.current_frame = 0
+        self.current_frame_index = 0
         return True
     
     def get_attack_hitbox(self):
@@ -295,3 +295,65 @@ class DungeonCharacter:
     def handle_input(self, keys, space_pressed):
         """Handle input for character control - to be implemented by subclasses"""
         pass
+
+    #getters and setters
+
+    def get_is_attacking(self):
+        """Check if character is currently attacking"""
+        return self.is_attacking
+
+    def get_is_using_special(self):
+        """Check if character is using special ability"""
+        return self.using_special
+
+    def get_is_alive(self):
+        """Check if character is alive"""
+        return self.is_alive
+
+    def get_direction(self):
+        """Get character's facing direction"""
+        return self.direction
+
+    def get_x(self):
+        """Get character's x position"""
+        return self.x
+
+    def get_y(self):
+        """Get character's y position"""
+        return self.y
+
+    def get_damage(self):
+        """Get character's damage"""
+        return self.damage
+
+    def get_frame_index(self):
+        """Get current animation frame index"""
+        return self.current_frame_index
+
+    def get_hit_targets(self):
+        """Get set of targets hit by current attack"""
+        return self.hit_targets
+
+    def add_hit_target(self, target):
+        """Add target to hit targets set"""
+        self.hit_targets.add(target)
+
+    def is_attack_complete(self):
+        """Check if current attack is complete"""
+        return not self.is_attacking
+
+    def get_attack_range(self):
+        """Get attack range - default implementation"""
+        return self.width  # Default attack range
+
+    def get_max_health(self):
+        """Get maximum health"""
+        return self.max_health
+
+    def get_health(self):
+        """Get current health"""
+        return self.health
+
+    def set_health(self, health):
+        """Set current health"""
+        self.health = max(0, min(self.max_health, health))

@@ -556,29 +556,34 @@ class Game:
 
         # Draw heroes, stopped here
         for hero in self._heroes.values():
-            if hero.is_alive:
-                #get the current sprite based on anim state
-                current_sprite = self.sprite_manager.get_sprite(
-                    hero.hero_type,
-                    hero.animation_state,
-                    hero.current_frame
+            if hero.get_is_alive():  # Use getter method
+                # Create hero rect for positioning
+                hero_rect = pygame.Rect(
+                    hero.get_x() - self._camera_x,  # Use getter
+                    hero.get_y() - self._camera_y,  # Use getter
+                    hero.width,
+                    hero.height
                 )
+
+                # Use the hero's current sprite
+                current_sprite = hero.get_current_sprite()
                 if current_sprite:
-                    #calc pos
-                    screen_x = hero.x -self._camera_x
-                    screen_y = hero.y - self._camera_y
-
-                    #draw sprite at hero pos
-                    self.screen.blit(current_sprite,(screen_x, screen_y))
-
+                    screen_x = hero.get_x() - self._camera_x
+                    screen_y = hero.get_y() - self._camera_y
+                    self.screen.blit(current_sprite, (screen_x, screen_y))
                 else:
-                    #fallback to rect
-                    hero_rect = pygame.Rect(
-                        hero.x - self._camera_x,
-                        hero.y - self._camera_y,
-                        hero.width,
-                        hero.height
-                    )
+                    # Fallback: draw colored rectangle based on hero type
+                    hero_type = hero.get_hero_type()
+                    if hero_type == "knight":
+                        color = (100, 100, 200)  # Blue for knight
+                    elif hero_type == "archer":
+                        color = (100, 200, 100)  # Green for archer
+                    elif hero_type == "cleric":
+                        color = (200, 100, 100)  # Red for cleric
+                    else:
+                        color = (150, 150, 150)  # Gray for default
+
+                    pygame.draw.rect(self.screen, color, hero_rect)
 
 
 
@@ -588,7 +593,9 @@ class Game:
 
                 # Flash if invulnerable
                 if not hero.is_invulnerable or int(hero.invulnerable_timer * 10) % 2:
-                    pygame.draw.rect(self.screen, color, hero_rect)
+                    # Only draw the rectangle if we didn't draw a sprite
+                    if not current_sprite:
+                        pass  # Rectangle already drawn above
 
                 # Draw attack hitbox for debugging
                 if hero.is_attacking:

@@ -14,7 +14,7 @@ class Cleric(Hero):
         self.__projectile_manager = None  # Will be set by the game
 
     def calculate_damage(self, target):
-        """Clerics deal more damage to undead enemies"""
+        """Clerics damage"""
         if hasattr(target, 'enemy_type') and target.enemy_type == 'undead':
             return int(self.get_damage() * 2)  # Double damage vs undead
         return self.get_damage()
