@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 #print(dir(src.model))
 from src.model.Game import Game, GameState
+from src.view.Menu import Menu #-- Jayda -- for Menu class
 from src.model.tiles import *
 
 
@@ -37,7 +38,9 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('Dungeon Adventure - Single Room Test')
 
-
+    #Jayda -- Show menu and start the game (only line needed)
+    menu = Menu(screen, SCREEN_WIDTH, SCREEN_HEIGHT)
+    menu.start_game(Game)
 
     print("Starting game...")
     print("Controls: ")
