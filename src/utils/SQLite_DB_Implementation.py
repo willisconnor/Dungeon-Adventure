@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from src.model.DungeonEntity import AnimationState
+from DungeonEntity import AnimationState
 
 def initialize_database():
     """Create and initialize the game database with hero data"""
@@ -53,9 +53,9 @@ def initialize_database():
     #insert hero stats ASK MOHAMMAD
     hero_stats = [
         #hero_type, max_health, speed, damage, attack_range, special_cooldown
-        ('knight', 150, 6, 10,90, 15.0), #tankier but slow with high melee dmg
-        ('cleric', 120, 7, 7, 75, 12.0), #Cleric is balanced
-        ('archer', 100, 8, 8, 150, 10.0) #archer is fgaster with longer range attack
+        ('knight', 375, 50, 55,40 , 15.0), #tankier but slow with high melee dmg
+        ('cleric', 250, 35, 85, 75, 12.0), #Cleric is balanced
+        ('archer', 150, 20, 40, 150, 10.0) #archer is faster with longer range attack
     ]
 
     c.executemany('INSERT INTO hero_stats VALUES (?,?,?,?,?,?)', hero_stats)
@@ -85,7 +85,7 @@ def initialize_database():
         #Deflect special attack, define in hero class
         ('archer', AnimationState.SPECIAL_SKILL.value, 6),
         #possibly store arrow sprite here
-        ('archer', AnimationState.ARROW.value, 1),
+        ('archer', AnimationState.Arrow.value, 1),
 
         # Cleric animations
         ('cleric', AnimationState.IDLE.value, 7),
@@ -190,12 +190,12 @@ def initialize_database():
     # Insert enemy stats
     enemy_stats = [
         # enemy_type, max_health, speed, damage, attack_range
-        ('Skeleton_Archer', 80, 5, 8, 70),
-        ('Skeleton_Spearman', 80, 5, 8, 70),
-        ('Skeleton_Warrior', 80, 5, 8, 70),
-        ('Gorgon_1', 100, 4, 10, 75),
-        ('Gorgon_2', 100, 4, 10, 75),
-        ('Gorgon_3', 100, 4, 10, 75)
+        ('Skeleton_Archer', 50, 10 , 50 , 100),
+        ('Skeleton_Spearman', 70, 15 , 40 , 70),
+        ('Skeleton_Warrior', 95, 20 , 30 , 45),
+        ('Gorgon_1', 100, 75, 35, 40),
+        ('Gorgon_2', 105, 75, 35, 40),
+        ('Gorgon_3', 115, 75, 35, 40)
     ]
 
     #will need separate handling for boss demon thingy
