@@ -10,6 +10,9 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
     """Base Hero class that all hero types will inherit from"""
 
     def __init__(self, x, y, hero_type = "default"):
+        #initialize pygame.sprite.Sprite first
+        pygame.sprite.Sprite.__init__(self)
+
         # Set basic hero info
         self.hero_type = hero_type
 
@@ -25,7 +28,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         name = hero_type.capitalize()
 
         # Initialize parent class (sets self.x, self.y, etc.)
-        super().__init__(
+        DungeonCharacter.__init__(
             x, y,
             width, height,
             name,
@@ -33,8 +36,9 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             stats["max_health"],  # current health
             stats["speed"],
             stats["damage"],
-            AnimationState
+            #AnimationState
         )
+        self.hero_type = hero_type
 
         # Load animations after base init (self.x, self.y now exist)
         self.frame_counts = self._load_frame_counts()
