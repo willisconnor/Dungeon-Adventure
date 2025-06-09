@@ -344,9 +344,17 @@ class Menu:
         self.__fps = 60
         self.__game_state_manager = GameStateManager()
         
-        # Attempt to load assets
-        self.__assets_path = "assets"
-        self.__background = self.__load_image("backgrounds/menu_background.png")
+        # Get the path to the project root
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self.__assets_path = os.path.join(project_root, "assets")
+        
+        # Load background image
+        background_img = self.__load_image("environment/MenuBackground.png")
+        if background_img:
+            # Resize the background to fit the screen
+            self.__background = pygame.transform.scale(background_img, (self.__width, self.__height))
+        else:
+            self.__background = None
         
         # Fallback background color if image fails to load
         self.__bg_color = (40, 40, 60)
@@ -379,10 +387,13 @@ class Menu:
         """
         try:
             full_path = os.path.join(self.__assets_path, image_path)
+            print(f"Attempting to load image from: {full_path}")
+            print(f"File exists: {os.path.exists(full_path)}")
             if os.path.exists(full_path):
                 return pygame.image.load(full_path)
             return None
-        except (pygame.error, FileNotFoundError):
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"Error loading image: {e}")
             return None
     
     def __get_font(self, size: int) -> pygame.font.Font:
@@ -422,10 +433,10 @@ class Menu:
         # Button positions (centered)
         center_x = self.__width // 2
         
-        # Create buttons
+        # Create buttons with lower Y positions
         play_button = Button(
             image=self.__play_btn_img,
-            pos=(center_x, 250),
+            pos=(center_x, 350),  # Changed from 250 to 350
             text_input="PLAY",
             font=self.__button_font,
             base_color=base_color,
@@ -435,7 +446,7 @@ class Menu:
         
         load_button = Button(
             image=self.__load_btn_img,
-            pos=(center_x, 400),
+            pos=(center_x, 450),  # Changed from 400 to 450
             text_input="LOAD",
             font=self.__button_font,
             base_color=base_color,
@@ -445,7 +456,7 @@ class Menu:
         
         exit_button = Button(
             image=self.__exit_btn_img,
-            pos=(center_x, 550),
+            pos=(center_x, 550),  # This was already at 550, so it can stay
             text_input="EXIT",
             font=self.__button_font,
             base_color=base_color,
@@ -476,11 +487,6 @@ class Menu:
                 self.__screen.blit(self.__background, (0, 0))
             else:
                 self.__screen.fill(self.__bg_color)
-            
-            # Draw title
-            menu_text = self.__title_font.render("DUNGEON ADVENTURE", True, "#b68f40")
-            menu_rect = menu_text.get_rect(center=(self.__width // 2, 100))
-            self.__screen.blit(menu_text, menu_rect)
             
             # Update and draw buttons
             for button in self.__buttons:
