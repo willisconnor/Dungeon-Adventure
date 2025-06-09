@@ -1,248 +1,302 @@
 import sqlite3
 import os
-from DungeonEntity import AnimationState
+from enum import IntEnum
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
 
-def initialize_database():
-    """Create and initialize the game database with hero data"""
 
-    #check if database already exists
-    if os.path.exists('game_data.db'):
-        print("Database already exists. Skipping initialization.")
-        return
+class AnimationState(IntEnum):
+    IDLE = 0
+    WALKING = 1
+    RUNNING = 2
+    ATTACKING_1 = 3
+    ATTACKING_2 = 4
+    ATTACKING_3 = 5
+    HURT = 6
+    DEAD = 7
+    SPECIAL_SKILL = 8
+    JUMPING = 9
+    RUNNING_ATTACK = 10
+    PROJECTILE = 11
+    EFFECT = 12
+    DYING = 13
 
-    #create a new databse
-    conn = sqlite3.connect('game_data.db')
-    c = conn.cursor()
 
-    #create hero stats table
-    c.execute('''
-    CREATE TABLE hero_stats (
-        hero_type TEXT PRIMARY KEY,
-        max_health INTEGER,
-        speed REAL,
-        damage INTEGER,
-        attack_range INTEGER,
-        special_cooldown INTEGER
+@dataclass
+class AnimationData:
+    sprite_sheet_path: str
+    frame_count: int
+    frame_rate: float
+    frame_width: int
+    frame_height: int
+    loop: bool
+
+
+class DatabaseHandler:
+    """Handles all database operations with asset pack support"""
+
+    def __init__(self, db_path: str = 'game_data.db'):
+        self.db_path = db_path
+        self.conn = None
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def connect(self):
+        """Establish database connection"""
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA foreign_keys = ON")
+
+    def close(self):
+        """Close database connection"""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
+    def initialize_database(self, asset_packs: List[Dict]):
+        """Initialize database with asset pack data"""
+        if os.path.exists(self.db_path):
+            return
+
+        with self.conn:
+            # Create tables from schema
+            with open('game_schema.sql', 'r') as f:
+                self.conn.executescript(f.read())
+
+            # Insert asset pack data
+            self._insert_asset_packs(asset_packs)
+
+            # Insert game characters with asset pack references
+            self._insert_default_characters(asset_packs)
+
+    def _insert_asset_packs(self, asset_packs: List[Dict]):
+        """Register asset packs in the database"""
+        for pack in asset_packs:
+            self.conn.execute(
+                """INSERT INTO asset_packs
+                       (pack_id, pack_name, author, version, license, base_path)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (pack['id'], pack['name'], pack.get('author'),
+                 pack.get('version'), pack.get('license'), pack['path'])
+            )
+
+            # Insert animation configurations
+            for anim in pack.get('animations', []):
+                self.conn.execute(
+                    """INSERT INTO animation_config
+                       (pack_id, character_type, animation_state, sprite_sheet_name,
+                        frame_count, frame_rate, frame_width, frame_height, loop)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (pack['id'], anim['character_type'], anim['state'],
+                     anim['sprite_sheet'], anim['frame_count'],
+                     anim.get('frame_rate', 24.0), anim['frame_width'],
+                     anim['frame_height'], anim.get('loop', True))
+                )
+
+            # Insert special animations
+            for special in pack.get('special_animations', []):
+                cursor = self.conn.execute(
+                    """INSERT INTO special_animations
+                       (pack_id, animation_name, sprite_sheet_name,
+                        frame_count, frame_rate, frame_width, frame_height)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (pack['id'], special['name'], special['sprite_sheet'],
+                     special['frame_count'], special.get('frame_rate', 24.0),
+                     special['frame_width'], special['frame_height'])
+                )
+
+                # Link special animations to characters
+                for char_link in special.get('character_links', []):
+                    self.conn.execute(
+                        """INSERT INTO character_special_animations
+                               (character_type, character_name, animation_state, special_animation_id)
+                           VALUES (?, ?, ?, ?)""",
+                        (char_link['character_type'], char_link['character_name'],
+                         char_link['state'], cursor.lastrowid)
+                    )
+
+    def _insert_default_characters(self, asset_packs: List[Dict]):
+        """Insert heroes and enemies with asset pack references"""
+        # Find asset packs by name or ID
+        knight_pack = next(p for p in asset_packs if 'knight' in p['id'].lower())
+        archer_pack = next(p for p in asset_packs if 'archer' in p['id'].lower())
+        cleric_pack = next(p for p in asset_packs if 'cleric' in p['id'].lower())
+
+        # Insert heroes
+        heroes = [
+            ('knight', 375, 50, 55, 40, 15.0, knight_pack['id']),
+            ('cleric', 250, 35, 85, 75, 12.0, cleric_pack['id']),
+            ('archer', 150, 20, 40, 150, 10.0, archer_pack['id'])
+        ]
+        self.conn.executemany(
+            """INSERT INTO hero_stats
+               (hero_type, max_health, speed, damage, attack_range, special_cooldown, asset_pack_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            heroes
         )
-        ''')
 
-    #create hero_animations table
-    c.execute('''
-    CREATE TABLE hero_animations
-    (
-        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        hero_type       TEXT,
-        animation_state INTEGER,
-        frame_count     INTEGER,
-        FOREIGN KEY (hero_type) REFERENCES hero_stats (hero_type)
-    )
-        ''')
+        # Insert enemies (example)
+        skeleton_pack = next(p for p in asset_packs if 'skeleton' in p['id'].lower())
+        gorgon_pack = next(p for p in asset_packs if 'gorgon' in p['id'].lower())
 
-    #create hero sprites table
-    c.execute('''
-    CREATE TABLE hero_sprites
-    (
-        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        hero_type       TEXT,
-        animation_state INTEGER,
-        sprite_path     TEXT,
-        FOREIGN KEY (hero_type) REFERENCES hero_stats (hero_type)
-    )
-    ''')
+        enemies = [
+            ('Skeleton_Archer', 50, 10, 50, 100, skeleton_pack['id']),
+            ('Skeleton_Spearman', 70, 15, 40, 70, skeleton_pack['id']),
+            ('Skeleton_Warrior', 95, 20, 30, 45, skeleton_pack['id']),
+            ('Gorgon_1', 100, 75, 35, 40, gorgon_pack['id']),
+            ('Gorgon_2', 105, 75, 35, 40, gorgon_pack['id']),
+            ('Gorgon_3', 115, 75, 35, 40, gorgon_pack['id'])
+        ]
+        self.conn.executemany(
+            """INSERT INTO enemy_stats
+                   (enemy_type, max_health, speed, damage, attack_range, asset_pack_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            enemies
+        )
 
-    #insert hero stats ASK MOHAMMAD
-    hero_stats = [
-        #hero_type, max_health, speed, damage, attack_range, special_cooldown
-        ('knight', 375, 50, 55,40 , 15.0), #tankier but slow with high melee dmg
-        ('cleric', 250, 35, 85, 75, 12.0), #Cleric is balanced
-        ('archer', 150, 20, 40, 150, 10.0) #archer is faster with longer range attack
-    ]
+    # Data access methods
+    def get_character_animation(self, character_type: str, character_name: str,
+                                state: AnimationState) -> Optional[AnimationData]:
+        """Get animation data for a character from its asset pack"""
+        # Determine which table to query
+        table = 'hero_stats' if character_type == 'hero' else 'enemy_stats'
+        id_field = 'hero_type' if character_type == 'hero' else 'enemy_type'
 
-    c.executemany('INSERT INTO hero_stats VALUES (?,?,?,?,?,?)', hero_stats)
+        # Get the asset pack for this character
+        pack = self.conn.execute(
+            f"""SELECT asset_pack_id FROM {table} WHERE {id_field} = ?""",
+            (character_name,)
+        ).fetchone()
 
-    #insert animation data for each hero
-    animation_data = [
-        #knight animations
-        ('knight', AnimationState.IDLE.value, 4),
-        ('knight', AnimationState.WALKING.value, 8),
-        ('knight', AnimationState.ATTACKING_1.value, 5),
-        ('knight', AnimationState.ATTACKING_2.value, 4),
-        ('knight', AnimationState.ATTACKING_3.value, 4),
-        ('knight', AnimationState.HURT.value, 2),
-        ('knight', AnimationState.DEAD.value, 6),
-        #special skill block
-        ('knight', AnimationState.SPECIAL_SKILL.value, 5),
+        if not pack:
+            return None
 
-        #archer animations
-        ('archer', AnimationState.IDLE.value, 9),
-        ('archer', AnimationState.WALKING.value, 8),
-        #each attack is a shot
-        ('archer', AnimationState.ATTACKING_1.value, 14),
-        ('archer', AnimationState.ATTACKING_2.value, 14),
-        ('archer', AnimationState.ATTACKING_3.value, 14),
-        ('archer', AnimationState.HURT.value, 3),
-        ('archer', AnimationState.DEAD.value, 5),
-        #Deflect special attack, define in hero class
-        ('archer', AnimationState.SPECIAL_SKILL.value, 6),
-        #possibly store arrow sprite here
-        ('archer', AnimationState.Arrow.value, 1),
+        # Get animation config from the asset pack
+        anim = self.conn.execute(
+            """SELECT ac.sprite_sheet_name,
+                      ac.frame_count,
+                      ac.frame_rate,
+                      ac.frame_width,
+                      ac.frame_height,
+                      ac.loop,
+                      ap.base_path
+               FROM animation_config ac
+                        JOIN asset_packs ap ON ac.pack_id = ap.pack_id
+               WHERE ac.pack_id = ?
+                 AND ac.character_type = ?
+                 AND ac.animation_state = ?""",
+            (pack['asset_pack_id'], character_type, int(state))
+        ).fetchone()
 
-        # Cleric animations
-        ('cleric', AnimationState.IDLE.value, 7),
-        ('cleric', AnimationState.WALKING.value, 8),
-        ('cleric', AnimationState.ATTACKING_1.value, 4),
-        ('cleric', AnimationState.ATTACKING_2.value, 4),
-        #no attack 3
-        ('cleric', AnimationState.HURT.value, 3),
-        ('cleric', AnimationState.DEAD.value, 6),
-        #fireball by pitbull starts playing
-        ('cleric', AnimationState.SPECIAL_SKILL.value, 8),
-        #store projectile sprites here?
-        ('cleric', AnimationState.FIREBALL.value, 12)
-    ]
+        if anim:
+            return AnimationData(
+                sprite_sheet_path=os.path.join(anim['base_path'], anim['sprite_sheet_name']),
+                frame_count=anim['frame_count'],
+                frame_rate=anim['frame_rate'],
+                frame_width=anim['frame_width'],
+                frame_height=anim['frame_height'],
+                loop=bool(anim['loop'])
+            )
+        return None
 
-    c.executemany('INSERT INTO hero_animations VALUES (NULL,?,?,?)', animation_data)
+    def get_special_animation(self, character_type: str, character_name: str,
+                              state: AnimationState) -> Optional[AnimationData]:
+        """Get special animation data (projectiles, effects)"""
+        anim = self.conn.execute("""
+            SELECT sa.sprite_sheet_name,
+                      sa.frame_count,
+                      sa.frame_rate,
+                      sa.frame_width,
+                      sa.frame_height,
+                      ap.base_path
+               FROM character_special_animations csa
+                        JOIN special_animations sa ON csa.special_animation_id = sa.animation_id
+                        JOIN asset_packs ap ON sa.pack_id = ap.pack_id
+               WHERE csa.character_type = ?
+                 AND csa.character_name = ?
+                 AND csa.animation_state = ?""",
+            (character_type, character_name, int(state))
+        ).fetchone()
 
-    #Insert sprite paths for each hero and animation state
-    #Format: hero_type, anmimation_state.value, sprite_path
+        if anim:
+            return AnimationData(
+                sprite_sheet_path=os.path.join(anim['base_path'], anim['sprite_sheet_name']),
+                frame_count=anim['frame_count'],
+                frame_rate=anim['frame_rate'],
+                frame_width=anim['frame_width'],
+                frame_height=anim['frame_height'],
+                loop=False  # Most special animations don't loop
+            )
+        return None
 
-    sprite_paths = [
-        # Knight sprite paths
-        ('knight', AnimationState.IDLE.value, 'assets/sprites/heroes/Knight_1/knight/Idle.png'),
-        ('knight', AnimationState.WALKING.value, 'assets/sprites/heroes/Knight_1/knight/walk.png'),
-        ('knight', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/Knight_1/knight/Attack 1.png'),
-        ('knight', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/Knight_1/knight/Attack 2.png'),
-        ('knight', AnimationState.ATTACKING_3.value, 'assets/sprites/heroes/Knight_1/knight/Attack 3.png'),
-        ('knight', AnimationState.HURT.value, 'assets/sprites/heroes/Knight_1/knight/Hurt.png'),
-        ('knight', AnimationState.DEAD.value, 'assets/sprites/heroes/knight/Knight_1/Dead.png'),
-        ('knight', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/knight/Knight_1/Defend.png'),
-        ('knight', AnimationState.RUNNING.value, 'assets/sprites/heroes/knight/Knight_1/Run.png'),
-        ('knight', AnimationState.JUMPING.value, 'assets/sprites/heroes/knight/Knight_1/Jump.png'),
-        ('knight', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png'),
+    def get_character_stats(self, character_type: str, character_name: str) -> Optional[Dict]:
+        """Get stats for a character"""
+        table = 'hero_stats' if character_type == 'hero' else 'enemy_stats'
+        id_field = 'hero_type' if character_type == 'hero' else 'enemy_type'
 
-        # Archer sprite paths
-        ('archer', AnimationState.IDLE.value, 'assets/sprites/heroes/archer/Samurai_Archer/Walk.png'),
-        ('archer', AnimationState.WALKING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Run.png'),
-        ('archer', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
-        ('archer', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
-        ('archer', AnimationState.ATTACKING_3.value, 'assets/sprites/heroes/archer/Samurai_Archer/Shot.png'),
-        ('archer', AnimationState.HURT.value, 'assets/sprites/heroes/archer/Samurai_Archer/Hurt.png'),
-        ('archer', AnimationState.DEAD.value, 'assets/sprites/heroes/archer/Samurai_Archer/Dead.png'),
-        ('archer', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/archer/Samurai_Archer/Attack_1.png'),
-        ('archer', AnimationState.ARROW.value, 'assets/sprites/heroes/archer/Samurai_Archer/Arrow.png'),
-        ('archer', AnimationState.RUNNING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Run.png'),
-        ('archer', AnimationState.JUMPING.value, 'assets/sprites/heroes/archer/Samurai_Archer/Jump.png'),
-        #('archer', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png'),
-
-        # Cleric sprite paths
-        ('cleric', AnimationState.IDLE.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Idle.png'),
-        ('cleric', AnimationState.WALKING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Walk.png'),
-        ('cleric', AnimationState.ATTACKING_1.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Attack_1.png'),
-        ('cleric', AnimationState.ATTACKING_2.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Attack_2.png'),
-        ('cleric', AnimationState.HURT.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Hurt.png'),
-        ('cleric', AnimationState.DEAD.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Dead.png'),
-        ('cleric', AnimationState.SPECIAL_SKILL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Fireball.png'),
-        ('cleric', AnimationState.FIREBALL.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Charge.png'),
-        ('cleric', AnimationState.RUNNING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Run.png'),
-        ('cleric', AnimationState.JUMPING.value, 'assets/sprites/heroes/cleric/Fire_Cleric/Jump.png'),
-        #('cleric', AnimationState.RUNNING_ATTACK.value, 'assets/sprites/heroes/knight/Knight_1/Run+Attack.png')
-
-    ]
-
-    c.executemany('INSERT INTO hero_sprites VALUES (NULL,?,?,?)', sprite_paths)
-
-    #create enemy stats table
-    c.execute('''
-              CREATE TABLE enemy_stats
-              (
-                  enemy_type   TEXT PRIMARY KEY,
-                  max_health   INTEGER,
-                  speed        REAL,
-                  damage       INTEGER,
-                  attack_range INTEGER
-              )
-              ''')
-
-    # Create enemy animations table
-    c.execute('''
-              CREATE TABLE enemy_animations
-              (
-                  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                  enemy_type      TEXT,
-                  animation_state INTEGER,
-                  frame_count     INTEGER,
-                  FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
-              )
-              ''')
-
-    # Create enemy sprites table
-    c.execute('''
-              CREATE TABLE enemy_sprites
-              (
-                  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                  enemy_type      TEXT,
-                  animation_state INTEGER,
-                  sprite_path     TEXT,
-                  FOREIGN KEY (enemy_type) REFERENCES enemy_stats (enemy_type)
-              )
-              ''')
-
-    # Insert enemy stats
-    enemy_stats = [
-        # enemy_type, max_health, speed, damage, attack_range
-        ('Skeleton_Archer', 50, 10 , 50 , 100),
-        ('Skeleton_Spearman', 70, 15 , 40 , 70),
-        ('Skeleton_Warrior', 95, 20 , 30 , 45),
-        ('Gorgon_1', 100, 75, 35, 40),
-        ('Gorgon_2', 105, 75, 35, 40),
-        ('Gorgon_3', 115, 75, 35, 40)
-    ]
-
-    #will need separate handling for boss demon thingy
-
-    c.executemany('INSERT INTO enemy_stats VALUES (?, ?, ?, ?, ?)', enemy_stats)
-
-    # Insert enemy animation data
-    enemy_animation_data = []
-
-    # Basic animation frames for all enemies
-    for enemy_type in ['Skeleton_Archer', 'Skeleton_Spearman', 'Skeleton_Warrior', 'Gorgon_1', 'Gorgon_2', 'Gorgon_3']:
-        enemy_animation_data.extend([
-            (enemy_type, AnimationState.IDLE.value, 4),
-            (enemy_type, AnimationState.WALKING.value, 6),
-            (enemy_type, AnimationState.ATTACKING_1.value, 5),
-            (enemy_type, AnimationState.HURT.value, 3),
-            (enemy_type, AnimationState.DYING.value, 5),
-            (enemy_type, AnimationState.DEAD.value, 1)
-        ])
-
-    c.executemany('INSERT INTO enemy_animations VALUES (NULL, ?, ?, ?)', enemy_animation_data)
-
-    # Insert enemy sprite paths
-    enemy_sprite_paths = []
-
-    # Generate sprite paths for each enemy type and animation state
-    for enemy_type in ['Skeleton_Archer', 'Skeleton_Spearman', 'Skeleton_Warrior', 'Gorgon_1', 'Gorgon_2', 'Gorgon_3']:
-        enemy_sprite_paths.extend([
-            (enemy_type, AnimationState.IDLE.value, f'assets/sprites/enemies/{enemy_type}/idle_sheet.png'),
-            (enemy_type, AnimationState.WALKING.value, f'assets/sprites/enemies/{enemy_type}/walking_sheet.png'),
-            (enemy_type, AnimationState.ATTACKING_1.value, f'assets/sprites/enemies/{enemy_type}/attack_sheet.png'),
-            (enemy_type, AnimationState.HURT.value, f'assets/sprites/enemies/{enemy_type}/hurt_sheet.png'),
-            (enemy_type, AnimationState.DYING.value, f'assets/sprites/enemies/{enemy_type}/dying_sheet.png'),
-            (enemy_type, AnimationState.DEAD.value, f'assets/sprites/enemies/{enemy_type}/dead_sheet.png')
-        ])
-
-    #Add boss sprite
+        cursor = self.conn.execute(
+            f'SELECT * FROM {table} WHERE {id_field} = ?',
+            (character_name,)
+        )
+        return dict(cursor.fetchone()) if cursor else None
 
 
-    c.executemany('INSERT INTO enemy_sprites VALUES (NULL, ?, ?, ?)', enemy_sprite_paths)
-
-    # Commit changes and close connection
-    conn.commit()
-    conn.close()
-
-    print("Database initialization completed successfully!")
-
+# Example asset pack configuration
+EXAMPLE_ASSET_PACKS = [
+    {
+        'id': 'knight_pack_1',
+        'name': 'Medieval Knight',
+        'author': 'GameArtStudio',
+        'version': '1.0',
+        'license': 'CC-BY-4.0',
+        'path': 'assets/sprites/heroes/knight_pack',
+        'animations': [
+            {
+                'character_type': 'hero',
+                'state': AnimationState.IDLE,
+                'sprite_sheet': 'knight_idle.png',
+                'frame_count': 4,
+                'frame_width': 64,
+                'frame_height': 64,
+                'loop': True
+            },
+            # More animations...
+        ],
+        'special_animations': [
+            {
+                'name': 'shield_block',
+                'sprite_sheet': 'shield_effect.png',
+                'frame_count': 8,
+                'frame_width': 128,
+                'frame_height': 128,
+                'character_links': [
+                    {
+                        'character_type': 'hero',
+                        'character_name': 'knight',
+                        'state': AnimationState.SPECIAL_SKILL
+                    }
+                ]
+            }
+        ]
+    },
+    # More asset packs...
+]
 
 if __name__ == "__main__":
-    initialize_database()
+    with DatabaseHandler() as db:
+        db.initialize_database(EXAMPLE_ASSET_PACKS)
+
+        # Example usage
+        knight_idle = db.get_character_animation('hero', 'knight', AnimationState.IDLE)
+        print(f"Knight idle animation: {knight_idle}")
+
+        knight_stats = db.get_character_stats('hero', 'knight')
+        print(f"Knight stats: {knight_stats}")
+
+        knight_special = db.get_special_animation('hero', 'knight', AnimationState.SPECIAL_SKILL)
+        print(f"Knight special animation: {knight_special}")
