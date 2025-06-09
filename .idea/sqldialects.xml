@@ -2,5 +2,8 @@
 <project version="4">
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/src/model/DungeonHero.py" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/src/utils/SQLite_DB_Implementation.py" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/src/utils/database.py" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/src/utils/init_database.py" dialect="GenericSQL" />
   </component>
 </project>
