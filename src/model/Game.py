@@ -565,7 +565,7 @@ class Game:
             self._transition_manager.draw_transition(self.screen)
 
         elif self.state == GameState.PAUSED:
-            self._draw_game()  # Draw game in background
+            self._draw_game_world()  # Draw game in background
             self._draw_pause_overlay()
 
         elif self.state == GameState.GAME_OVER:
