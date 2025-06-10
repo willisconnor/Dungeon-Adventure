@@ -12,6 +12,11 @@ from src.model.Item import Item
 from src.model.Monster import Monster
 from src.model.Platform import Platform
 
+class DoorType(Enum):
+    #Doors based through interaction method
+    WALK_THROUGH = "walk_through"
+    INTERACTIVE = "interactive"
+
 class Direction(Enum):
     #for door directions
     UP = (0, -1)
@@ -97,7 +102,7 @@ class FloorRenderer:
                         self.__draw_tile(surface, tileset, tile_id, tile_x, tile_y)
 
     def __draw_tile(self, surface: pygame.Surface, tileset: pygame.Surface, tile_id: int, x: int, y: int):
-        if tile_id <- 0:
+        if tile_id <= 0:
             return
 
         tileset_width_in_tiles = tileset.get_width() // self.__tile_size
@@ -113,30 +118,117 @@ class FloorRenderer:
         except:
             print(f"Error drawing tile {tile_id} at position {x}, {y}")
 
+
+class DoorInteractionState:
+    """Encapsulates door interaction state and UI management"""
+
+    def __init__(self):
+        self.__player_nearby = False
+        self.__show_prompt = False
+        self.__prompt_font = pygame.font.Font(None, 20)
+        self.__prompt_text = ""
+        self.__prompt_surface = None
+
+    def set_player_nearby(self, nearby: bool, prompt_text: str = ""):
+        """Update player proximity and prompt text"""
+        self.__player_nearby = nearby
+        self.__show_prompt = nearby
+        if nearby and prompt_text:
+            self.__prompt_text = prompt_text
+            self.__prompt_surface = self.__prompt_font.render(
+                prompt_text, True, (255, 255, 255), (0, 0, 0)
+            )
+        else:
+            self.__prompt_surface = None
+
+    def is_player_nearby(self) -> bool:
+        """Check if player is nearby"""
+        return self.__player_nearby
+
+    def should_show_prompt(self) -> bool:
+        """Check if interaction prompt should be shown"""
+        return self.__show_prompt
+
+    def get_prompt_surface(self) -> Optional[pygame.Surface]:
+        """Get the rendered prompt surface"""
+        return self.__prompt_surface
+
+
 class Door:
     """Represents a door"""
 
-    def __init__(self, x: int, y: int, direction: Direction, dest_room: Tuple[int, int], width: int = 64,
-                 height: int = 32):
+    def __init__(self, direction: Direction, dest_room: Tuple[int, int], room_width: int, room_height: int,
+                 floor_y: int):
         """
-        Initialize a door
+        Initialize a door with calculated position based on room dimensions
 
         Args:
-            x: X position of door
-            y: Y position of door
             direction: Direction the door faces
             dest_room: Grid position of destination room
-            width: Width of door
-            height: Height of door
+            room_width: Width of the room containing this door
+            room_height: Height of the room containing this door
+            floor_y: Y position of the floor
         """
-        self.__x = x
-        self.__y = y
         self.__direction = direction
         self.__dest_room = dest_room
-        self.__width = width
-        self.__height = height
-        self.__rect = pygame.Rect(x, y, width, height)
+        self.__width = 64
+        self.__height = 96
         self.__is_locked = False
+
+        #determine door type based on direction
+        self.__door_type = (DoorType.INTERACTIVE
+                            if direction in [Direction.UP, Direction.DOWN]
+                            else DoorType.WALK_THROUGH)
+
+        # Calculate door position based on direction and room dimensions
+        self.__x, self.__y = self.__calculate_door_position(direction, room_width, room_height, floor_y)
+        self.__rect = pygame.Rect(self.__x, self.__y, self.__width, self.__height)
+
+        # Interaction state management
+        self.__interaction_state = DoorInteractionState()
+
+        # Create interaction prompt text
+        self.__interaction_prompt = self.__create_interaction_prompt()
+
+    def __calculate_door_position(self, direction: Direction, room_width: int, room_height: int, floor_y: int) -> Tuple[
+        int, int]:
+        """
+        Calculate door position - UP/DOWN doors separated and all at floor level
+
+        Args:
+            direction: Direction the door faces
+            room_width: Width of the room
+            room_height: Height of the room
+            floor_y: Y position where floor starts
+
+        Returns:
+            (x, y) position for the door
+        """
+        # All doors positioned at floor level (floor_y - height)
+        door_y = floor_y - self.__height
+
+        if direction == Direction.LEFT:
+            return (0, door_y)
+        elif direction == Direction.RIGHT:
+            return (room_width - self.__width, door_y)
+        elif direction == Direction.UP:
+            # Position UP door to the left of center
+            separation_offset = 80  # Distance from center
+            return (room_width // 2 - separation_offset - self.__width // 2, door_y)
+        elif direction == Direction.DOWN:
+            # Position DOWN door to the right of center
+            separation_offset = 80  # Distance from center
+            return (room_width // 2 + separation_offset - self.__width // 2, door_y)
+        else:
+            # Default fallback
+            return (room_width // 2 - self.__width // 2, door_y)
+
+    def __create_interaction_prompt(self) -> str:
+        """Create appropriate interaction prompt text"""
+        if self.__door_type == DoorType.INTERACTIVE:
+            direction_text = "UP" if self.__direction == Direction.UP else "DOWN"
+            return f"Press E to go {direction_text}"
+        return ""
 
     @property
     def x(self) -> int:
@@ -168,6 +260,11 @@ class Door:
         """Check if door is locked"""
         return self.__is_locked
 
+    @property
+    def door_type(self) -> DoorType:
+        """Get door interaction type"""
+        return self.__door_type
+
     def lock(self):
         """Lock the door"""
         self.__is_locked = True
@@ -188,9 +285,62 @@ class Door:
         """
         return self.__rect.colliderect(entity_rect)
 
+    def update_player_proximity(self, player_x: int, player_y: int, player_width: int = 32, player_height: int = 32):
+        """
+        Update door's awareness of player proximity for interactive doors
+
+        Args:
+            player_x: Player X position
+            player_y: Player Y position
+            player_width: Player width
+            player_height: Player height
+        """
+        if self.__door_type == DoorType.INTERACTIVE:
+            player_rect = pygame.Rect(player_x, player_y, player_width, player_height)
+            is_nearby = self.check_collision(player_rect)
+
+            self.__interaction_state.set_player_nearby(
+                is_nearby,
+                self.__interaction_prompt if is_nearby and not self.__is_locked else ""
+            )
+        else:
+            # Walk-through doors don't need proximity tracking
+            self.__interaction_state.set_player_nearby(False)
+
+    def can_enter_automatically(self, player_rect: pygame.Rect) -> bool:
+        """Check if player can enter this door automatically (walk-through doors)"""
+        return (self.__door_type == DoorType.WALK_THROUGH and
+                not self.__is_locked and
+                self.check_collision(player_rect))
+
+    def can_enter_with_interaction(self, player_rect: pygame.Rect, interaction_key_pressed: bool) -> bool:
+        """Check if player can enter this door with key press (interactive doors)"""
+        return (self.__door_type == DoorType.INTERACTIVE and
+                not self.__is_locked and
+                self.check_collision(player_rect) and
+                interaction_key_pressed)
+
+    def get_spawn_position_for_entering_entity(self, room_width: int, room_height: int, floor_y: int,
+                                               entity_width: int = 32, entity_height: int = 32) -> Tuple[int, int]:
+        """Get the position where an entity should spawn when entering through this door"""
+        spawn_offset = 80  # Distance from the door to spawn the entity
+
+        if self.__direction == Direction.LEFT:
+            return (spawn_offset, floor_y - entity_height)
+        elif self.__direction == Direction.RIGHT:
+            return (room_width - spawn_offset - entity_width, floor_y - entity_height)
+        elif self.__direction == Direction.UP:
+            # Spawn below the UP door
+            return (self.__x + self.__width // 2 - entity_width // 2, floor_y - entity_height)
+        elif self.__direction == Direction.DOWN:
+            # Spawn below the DOWN door
+            return (self.__x + self.__width // 2 - entity_width // 2, floor_y - entity_height)
+        else:
+            return (room_width // 2 - entity_width // 2, floor_y - entity_height)
+
     def draw(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
         """
-        Draw the door
+        Draw the door with visual indicators and interaction prompts
 
         Args:
             surface: Surface to draw on
@@ -199,14 +349,81 @@ class Door:
         draw_x = self.__x - camera_offset[0]
         draw_y = self.__y - camera_offset[1]
 
-        # Choose color based on lock status
-        color = (100, 100, 100) if self.__is_locked else (139, 69, 19)  # Gray if locked, brown if unlocked
+        # Choose color based on lock status and door type
+        if self.__is_locked:
+            color = (100, 100, 100)  # Gray if locked
+        elif self.__door_type == DoorType.INTERACTIVE:
+            color = (100, 150, 200)  # Blue for interactive doors
+        else:
+            color = (139, 69, 19)  # Brown for walk-through doors
 
         # Draw door
         pygame.draw.rect(surface, color, (draw_x, draw_y, self.__width, self.__height))
 
         # Draw door frame
-        pygame.draw.rect(surface, (160, 82, 45), (draw_x, draw_y, self.__width, self.__height), 3)
+        frame_color = (160, 82, 45) if not self.__is_locked else (120, 120, 120)
+        pygame.draw.rect(surface, frame_color, (draw_x, draw_y, self.__width, self.__height), 3)
+
+        # Draw direction indicator
+        self.__draw_direction_indicator(surface, draw_x, draw_y)
+
+        # Draw interaction prompt if player is nearby
+        self.__draw_interaction_prompt(surface, draw_x, draw_y)
+
+    def __draw_direction_indicator(self, surface: pygame.Surface, draw_x: int, draw_y: int):
+        """Draw directional arrow on the door"""
+        indicator_color = (255, 255, 0) if not self.__is_locked else (150, 150, 150)
+        center_x = draw_x + self.__width // 2
+        center_y = draw_y + self.__height // 2
+
+        arrow_size = 8
+
+        if self.__direction == Direction.LEFT:
+            pygame.draw.polygon(surface, indicator_color, [
+                (center_x - arrow_size, center_y),
+                (center_x + arrow_size // 2, center_y - arrow_size),
+                (center_x + arrow_size // 2, center_y + arrow_size)
+            ])
+        elif self.__direction == Direction.RIGHT:
+            pygame.draw.polygon(surface, indicator_color, [
+                (center_x + arrow_size, center_y),
+                (center_x - arrow_size // 2, center_y - arrow_size),
+                (center_x - arrow_size // 2, center_y + arrow_size)
+            ])
+        elif self.__direction == Direction.UP:
+            pygame.draw.polygon(surface, indicator_color, [
+                (center_x, center_y - arrow_size),
+                (center_x - arrow_size, center_y + arrow_size // 2),
+                (center_x + arrow_size, center_y + arrow_size // 2)
+            ])
+        elif self.__direction == Direction.DOWN:
+            pygame.draw.polygon(surface, indicator_color, [
+                (center_x, center_y + arrow_size),
+                (center_x - arrow_size, center_y - arrow_size // 2),
+                (center_x + arrow_size, center_y - arrow_size // 2)
+            ])
+
+    def __draw_interaction_prompt(self, surface: pygame.Surface, draw_x: int, draw_y: int):
+        """Draw interaction prompt above the door if player is nearby"""
+        if self.__interaction_state.should_show_prompt():
+            prompt_surface = self.__interaction_state.get_prompt_surface()
+            if prompt_surface:
+                # Position prompt above the door, centered
+                prompt_x = draw_x + self.__width // 2 - prompt_surface.get_width() // 2
+                prompt_y = draw_y - prompt_surface.get_height() - 10
+
+                # Draw background for better readability
+                background_rect = pygame.Rect(
+                    prompt_x - 4, prompt_y - 2,
+                    prompt_surface.get_width() + 8,
+                    prompt_surface.get_height() + 4
+                )
+                pygame.draw.rect(surface, (0, 0, 0, 180), background_rect)
+                pygame.draw.rect(surface, (255, 255, 255), background_rect, 1)
+
+                # Draw the prompt text
+                surface.blit(prompt_surface, (prompt_x, prompt_y))
+
 
 class Room:
     """represents a single room"""
@@ -271,6 +488,45 @@ class Room:
         """Check if this is the start room"""
         return self.__is_start_room
 
+    def update_door_interactions(self, player_x: int, player_y: int, player_width: int = 32, player_height: int = 32):
+        """Update interaction state for all doors in the room"""
+        for door in self.__doors.values():
+            door.update_player_proximity(player_x, player_y, player_width, player_height)
+
+    def get_interactive_door_at_position(self, player_x: int, player_y: int,
+                                         player_width: int = 32, player_height: int = 32) -> Optional[Door]:
+        """Get interactive door that player is colliding with"""
+        player_rect = pygame.Rect(player_x, player_y, player_width, player_height)
+
+        for door in self.__doors.values():
+            if (door.door_type == DoorType.INTERACTIVE and
+                    door.check_collision(player_rect)):
+                return door
+        return None
+
+    def get_walkthrough_door_at_position(self, player_x: int, player_y: int,
+                                         player_width: int = 32, player_height: int = 32) -> Optional[Door]:
+        """Get walk-through door that player is colliding with"""
+        player_rect = pygame.Rect(player_x, player_y, player_width, player_height)
+
+        for door in self.__doors.values():
+            if (door.door_type == DoorType.WALK_THROUGH and
+                    door.check_collision(player_rect)):
+                return door
+        return None
+
+    def has_door_in_direction(self, direction: Direction) -> bool:
+        """
+        Check if room has a door in the specified direction
+
+        Args:
+            direction: Direction to check
+
+        Returns:
+            True if door exists in that direction
+        """
+        return direction in self.__doors
+
     def add_door(self, direction: Direction, dest_room: Tuple[int, int]):
         """
         Add a door to the room
@@ -279,9 +535,20 @@ class Room:
             direction: Direction the door faces
             dest_room: Destination room grid coordinates
         """
-        door_x, door_y = self.__calculate_door_position(direction)
-        door = Door(door_x, door_y, direction, dest_room)
+        door = Door(direction, dest_room, self.__width, self.__height, self.__floor_y)
         self.__doors[direction] = door
+
+    def get_door_in_direction(self, direction: Direction) -> Optional[Door]:
+        """
+        Get door in specified direction
+
+        Args:
+            direction: Direction to look for door
+
+        Returns:
+            Door object if found, None otherwise
+        """
+        return self.__doors.get(direction)
 
     def __calculate_door_position(self, direction: Direction) -> Tuple[int, int]:
         """
@@ -357,6 +624,41 @@ class Room:
 
         return None
 
+    def get_spawn_position_from_direction(self, from_direction: Direction, entity_width: int = 32,
+                                          entity_height: int = 32) -> Tuple[int, int]:
+        """
+        Get spawn position for entity entering from specified direction
+
+        Args:
+            from_direction: Direction entity is coming from
+            entity_width: Width of entity
+            entity_height: Height of entity
+
+        Returns:
+            (x, y) position where entity should spawn
+        """
+        # Get the opposite direction door (where we're entering through)
+        opposite_direction = self.__get_opposite_direction(from_direction)
+        door = self.__doors.get(opposite_direction)
+
+        if door:
+            return door.get_spawn_position_for_entering_entity(
+                self.__width, self.__height, self.__floor_y, entity_width, entity_height
+            )
+        else:
+            # Fallback to center if no door found
+            return (self.__width // 2 - entity_width // 2, self.__floor_y - entity_height)
+
+    def __get_opposite_direction(self, direction: Direction) -> Direction:
+        """Get opposite direction"""
+        opposites = {
+            Direction.LEFT: Direction.RIGHT,
+            Direction.RIGHT: Direction.LEFT,
+            Direction.UP: Direction.DOWN,
+            Direction.DOWN: Direction.UP
+        }
+        return opposites[direction]
+
     def draw(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
         """
         Draw the room including background, floor, and doors
@@ -385,6 +687,7 @@ class DungeonManager:
         self.__grid_width, self.__grid_height = dungeon_size
         self.__dungeon_grid: List[List[Optional[Room]]] = [[None for _ in range(self.__grid_width)] for _ in range(self.__grid_height)]
         self.__current_room_pos: Tuple[int, int] = None
+        self.__previous_room_pos: Optional[Tuple[int, int]] = None
 
         #initialize rendered and assets
         self.__floor_renderer = FloorRenderer(floor_csv_path)
@@ -418,8 +721,53 @@ class DungeonManager:
             fallback.fill((100, 100, 100))
             return fallback
 
+    def try_enter_walkthrough_door(self, player_x: int, player_y: int) -> bool:
+        """Try to enter a walk-through door automatically"""
+        current_room = self.get_current_room()
+        if not current_room:
+            return False
+
+        door = current_room.get_walkthrough_door_at_position(player_x, player_y)
+        if door and not door.is_locked:
+            return self.__execute_room_transition(door)
+        return False
+
+    def try_enter_interactive_door(self, player_x: int, player_y: int, interaction_key_pressed: bool) -> bool:
+        """Try to enter an interactive door with key press"""
+        current_room = self.get_current_room()
+        if not current_room:
+            return False
+
+        door = current_room.get_interactive_door_at_position(player_x, player_y)
+        if door and not door.is_locked and interaction_key_pressed:
+            return self.__execute_room_transition(door)
+        return False
+
+    def __execute_room_transition(self, door: Door) -> bool:
+        """Execute the actual room transition"""
+        self.__previous_room_pos = self.__current_room_pos
+        self.__current_room_pos = door.dest_room
+
+        # Verify destination room exists
+        dest_room = self.get_current_room()
+        if dest_room:
+            return True
+        else:
+            # Revert if destination doesn't exist
+            self.__current_room_pos = self.__previous_room_pos
+            self.__previous_room_pos = None
+            return False
+
+    def update_current_room_interactions(self, player_x: int, player_y: int,
+                                         player_width: int = 32, player_height: int = 32):
+        """Update door interactions for current room"""
+        current_room = self.get_current_room()
+        if current_room:
+            current_room.update_door_interactions(player_x, player_y, player_width, player_height)
+
+
     def __generate_dungeon(self):
-        """Generate the dungeon layout"""
+        """Generate the dungeon layout with proper connectivity"""
         # Start in center
         start_pos = (self.__grid_height // 2, self.__grid_width // 2)
         self.__current_room_pos = start_pos
@@ -430,49 +778,49 @@ class DungeonManager:
         self.__initialize_room(start_room)
         self.__dungeon_grid[start_pos[0]][start_pos[1]] = start_room
 
-        # Generate additional rooms
-        self.__generate_connected_rooms(start_pos)
+        # Generate connected rooms
+        self.__generate_connected_rooms()
 
-    def __generate_connected_rooms(self, start_pos: Tuple[int, int]):
-        """Generate connected rooms from start position"""
-        rooms_to_process = [start_pos]
-        created_rooms = {start_pos}
-        room_count = 1
-        max_rooms = min(8, self.__grid_width * self.__grid_height // 2)
+        # Add doors only where connections exist
+        self.__create_doors()
 
-        while rooms_to_process and room_count < max_rooms:
-            current = rooms_to_process.pop(0)
-            current_room = self.__dungeon_grid[current[0]][current[1]]
+    def __generate_connected_rooms(self):
+        """Generate a connected set of rooms"""
+        rooms_to_create = [
+            (self.__grid_height // 2, self.__grid_width // 2 - 1),  # Left of start
+            (self.__grid_height // 2, self.__grid_width // 2 + 1),  # Right of start
+            (self.__grid_height // 2 - 1, self.__grid_width // 2),  # Above start
+            (self.__grid_height // 2 + 1, self.__grid_width // 2),  # Below start
+        ]
 
-            # Try to add doors (left and right only)
-            directions = [Direction.LEFT, Direction.RIGHT]
-            random.shuffle(directions)
+        # Create rooms at valid positions
+        for pos in rooms_to_create:
+            if self.__is_valid_position(pos):
+                room = Room(pos)
 
-            for direction in directions:
-                if random.random() < 0.7:  # 70% chance to add door
-                    new_pos = self.__get_neighbor_position(current, direction)
+                # Make one of the edge rooms a boss room
+                if pos == (self.__grid_height // 2, self.__grid_width // 2 + 1):
+                    room.set_as_boss_room()
 
-                    if self.__is_valid_position(new_pos) and new_pos not in created_rooms:
-                        # Create new room
-                        new_room = Room(new_pos)
-                        self.__initialize_room(new_room)
-                        self.__dungeon_grid[new_pos[0]][new_pos[1]] = new_room
+                self.__initialize_room(room)
+                self.__dungeon_grid[pos[0]][pos[1]] = room
 
-                        # Add doors
-                        current_room.add_door(direction, new_pos)
-                        opposite_dir = self.__get_opposite_direction(direction)
-                        new_room.add_door(opposite_dir, current)
+    def __create_doors(self):
+        """Create doors between connected rooms"""
+        for row in range(self.__grid_height):
+            for col in range(self.__grid_width):
+                current_room = self.__dungeon_grid[row][col]
+                if current_room is None:
+                    continue
 
-                        created_rooms.add(new_pos)
-                        rooms_to_process.append(new_pos)
-                        room_count += 1
+                # Check all four directions
+                for direction in Direction:
+                    neighbor_pos = self.__get_neighbor_position((row, col), direction)
 
-        # Set boss room
-        if len(created_rooms) > 1:
-            room_list = list(created_rooms)
-            room_list.remove(start_pos)
-            boss_pos = random.choice(room_list)
-            self.__dungeon_grid[boss_pos[0]][boss_pos[1]].set_as_boss_room()
+                    if (self.__is_valid_position(neighbor_pos) and
+                            self.__dungeon_grid[neighbor_pos[0]][neighbor_pos[1]] is not None):
+                        # There's a room in this direction, add a door
+                        current_room.add_door(direction, neighbor_pos)
 
     def __initialize_room(self, room: Room):
         """Initialize room with floor and background"""
@@ -488,15 +836,32 @@ class DungeonManager:
         """Check if position is within grid bounds"""
         return (0 <= pos[0] < self.__grid_height and 0 <= pos[1] < self.__grid_width)
 
-    def __get_opposite_direction(self, direction: Direction) -> Direction:
-        """Get opposite direction"""
-        opposites = {
-            Direction.LEFT: Direction.RIGHT,
-            Direction.RIGHT: Direction.LEFT
-        }
-        return opposites[direction]
+    def __get_direction_between_rooms(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> Optional[Direction]:
+        """
+        Get the direction from one room to another
 
-    def get_current_room(self) -> Room:
+        Args:
+            from_pos: Starting room position
+            to_pos: Destination room position
+
+        Returns:
+            Direction from from_pos to to_pos, or None if not adjacent
+        """
+        dr = to_pos[0] - from_pos[0]
+        dc = to_pos[1] - from_pos[1]
+
+        if dr == 0 and dc == 1:
+            return Direction.RIGHT
+        elif dr == 0 and dc == -1:
+            return Direction.LEFT
+        elif dr == 1 and dc == 0:
+            return Direction.DOWN
+        elif dr == -1 and dc == 0:
+            return Direction.UP
+        else:
+            return None
+
+    def get_current_room(self) -> Optional[Room]:
         """Get the current room"""
         if self.__current_room_pos:
             return self.__dungeon_grid[self.__current_room_pos[0]][self.__current_room_pos[1]]
@@ -519,17 +884,66 @@ class DungeonManager:
 
         door = current_room.get_door_at_position(player_x, player_y)
         if door and not door.is_locked:
+            self.__previous_room_pos = self.__current_room_pos
             self.__current_room_pos = door.dest_room
             return True
 
         return False
 
+    def get_player_spawn_position_for_current_room(self, entity_width: int = 32, entity_height: int = 32) -> Tuple[
+        int, int]:
+        """
+        Get the position where the player should spawn in the current room
+
+        Args:
+            entity_width: Width of the player entity
+            entity_height: Height of the player entity
+
+        Returns:
+            (x, y) position where player should spawn
+        """
+        current_room = self.get_current_room()
+        if not current_room:
+            return (800, 480)  # Fallback position
+
+        if self.__previous_room_pos is None:
+            # First time entering (start room), spawn in center
+            return (current_room.width // 2 - entity_width // 2, current_room.floor_y - entity_height)
+
+        # Get direction we came from
+        from_direction = self.__get_direction_between_rooms(self.__current_room_pos, self.__previous_room_pos)
+        if from_direction:
+            return current_room.get_spawn_position_from_direction(from_direction, entity_width, entity_height)
+        else:
+            # Fallback to center
+            return (current_room.width // 2 - entity_width // 2, current_room.floor_y - entity_height)
+
     def get_current_room_position(self) -> Tuple[int, int]:
         """Get current room grid position"""
         return self.__current_room_pos
 
-    def get_dungeon_width(self):
+    def get_previous_room_position(self) -> Optional[Tuple[int, int]]:
+        """Get previous room grid position"""
+        return self.__previous_room_pos
+
+    def get_dungeon_width(self) -> int:
+        """Get dungeon grid width"""
         return self.__grid_width
 
-    def get_dungeon_height(self):
+    def get_dungeon_height(self) -> int:
+        """Get dungeon grid height"""
         return self.__grid_height
+
+    def get_room_at_position(self, pos: Tuple[int, int]) -> Optional[Room]:
+        """
+        Get room at specified grid position
+
+        Args:
+            pos: Grid position to check
+
+        Returns:
+            Room at position or None if no room exists
+        """
+        if self.__is_valid_position(pos):
+            return self.__dungeon_grid[pos[0]][pos[1]]
+        return None

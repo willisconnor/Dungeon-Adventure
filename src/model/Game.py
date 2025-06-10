@@ -162,8 +162,7 @@ class Game:
         self._initialize_dungeon()
         
         if self._current_room:
-            start_x = self._current_room.width // 2
-            start_y = self._current_room.height - 60
+            start_x, start_y = self._dungeon_manager.get_player_spawn_position_for_current_room()
 
             hero = self._create_hero(self._selected_hero_type, start_x, start_y)
             if hero:
@@ -299,33 +298,31 @@ class Game:
             self._update_camera()
             self._check_game_state()
 
-
     def _check_door_traversal(self, prev_x: int, prev_y: int):
         """Check if hero has moved into a door and handle traversal"""
         if not self._current_room or not self._active_hero:
             return
 
-        # Get door at hero's current position
-        door = self._current_room.get_door_at_position(
-            self._active_hero.x,
-            self._active_hero.y,
-            self._active_hero.width,
-            self._active_hero.height
+        # Update door interactions first (this handles the UI prompts)
+        self._dungeon_manager.update_current_room_interactions(
+            self._active_hero.x, self._active_hero.y,
+            self._active_hero.width, self._active_hero.height
         )
 
-        if door:
-            current_pos = self._dungeon_manager.get_current_room_position()
+        # Check for walk-through doors (LEFT/RIGHT) - automatic entry
+        if self._dungeon_manager.try_enter_walkthrough_door(
+                self._active_hero.x, self._active_hero.y
+        ):
+            self._start_room_transition(None)
+            return
 
-            # Check if player can use this door
-            if self._door_manager.can_use_door(current_pos, door.direction):
-                # Start room transition
-                self._start_room_transition(door)
-            else:
-                # Door is locked - show message and prevent movement
-                self._show_door_locked_message(current_pos, door.direction)
-                # Reset hero to previous position
-                self._active_hero.x = prev_x
-                self._active_hero.y = prev_y
+        # Check for interactive doors (UP/DOWN) with E key press
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_e]:  # Press E to interact
+            if self._dungeon_manager.try_enter_interactive_door(
+                    self._active_hero.x, self._active_hero.y, True
+            ):
+                self._start_room_transition(None)
 
     def _start_room_transition(self, door):
         """Start a room transition through the given door"""
@@ -344,51 +341,32 @@ class Game:
 
     def _complete_room_transition(self):
         """Called at the midpoint of room transition to actually change rooms"""
-        if not self._pending_door:
-            return
+        # The room transition was already handled by the dungeon manager
+        # Just update the current room reference
+        self._current_room = self._dungeon_manager.get_current_room()
 
-        # Actually move to the new room
-        success = self._dungeon_manager.try_enter_door(
-            self._active_hero.x,
-            self._active_hero.y
-        )
+        # Reposition hero in the new room
+        self._reposition_hero_after_door_traversal()
 
-        if success:
-            # Update current room reference
-            self._current_room = self._dungeon_manager.get_current_room()
-
-            # Reposition hero in the new room
-            self._reposition_hero_after_door_traversal()
-
-            # Clear any room-specific enemies/items if needed
-            self._handle_room_change()
+        # Clear any room-specific enemies/items if needed
+        self._handle_room_change()
 
         # Clear pending door
         self._pending_door = None
 
     def _reposition_hero_after_door_traversal(self):
-        """Reposition hero after entering a door"""
+        """Reposition hero after entering a door using dungeon manager"""
         if not self._active_hero or not self._current_room:
             return
 
-        # Get current room doors to determine where hero came from
-        current_pos = self._dungeon_manager.get_current_room_position()
-        doors = self._current_room.doors
+        # Get the proper spawn position from dungeon manager
+        spawn_x, spawn_y = self._dungeon_manager.get_player_spawn_position_for_current_room(
+            self._active_hero.width,
+            self._active_hero.height
+        )
 
-        # Position hero near the appropriate door
-        if Direction.LEFT in doors:
-            # Hero came from right, position near left door
-            self._active_hero.x = 100
-        elif Direction.RIGHT in doors:
-            # Hero came from left, position near right door
-            self._active_hero.x = self._current_room.width - 100
-        else:
-            # Default to center
-            self._active_hero.x = self._current_room.width // 2
-
-        # Always position on floor
-        self._active_hero.y = self._current_room.floor_y - 60
-
+        self._active_hero.x = spawn_x
+        self._active_hero.y = spawn_y
     def _handle_room_change(self):
         """Handle any room-specific changes when entering a new room"""
         # Clear projectiles from previous room
@@ -582,23 +560,6 @@ class Game:
         elif self.state == GameState.PLAYING:
             # Create a temporary group for camera-adjusted drawing
 
-            visible_sprites = pygame.sprite.Group()
-
-
-
-            # Draw layers in order
-            for layer in [self.background_sprites, self.midground_sprites, self.foreground_sprites]:
-                for sprite in layer:
-                    # Check if sprite is visible on screen
-                    if (sprite.rect.right > self._camera_x and
-                            sprite.rect.left < self._camera_x + self.width and
-                            sprite.rect.bottom > self._camera_y and
-                            sprite.rect.top < self._camera_y + self.height):
-                        # Draw with camera offset
-                        self.screen.blit(
-                            sprite.image,
-                            (sprite.rect.x - self._camera_x, sprite.rect.y - self._camera_y)
-                        )
             self._draw_game_world()
             self._draw_ui()
             self._transition_manager.draw_transition(self.screen)
@@ -618,11 +579,9 @@ class Game:
         if self._current_room:
             self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
 
-        self._draw_platforms()
         self._draw_enemies()
         self._draw_heroes()
         self._draw_projectiles()
-        self._draw_room_objects()
 
     def _draw_platforms(self):
         """Draw platforms with camera offset"""
@@ -839,10 +798,10 @@ class Game:
             self.screen.blit(text, text_rect)
             y_offset += 30
 
-    def _draw_game(self):
-        """Draw the game world"""
+        """def _draw_game(self):
+        Draw the game world
         if self._current_room:
-            self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
+            self._current_room.draw(self.screen, (self._camera_x, self._camera_y))"""
 
         # Draw platforms
         for platform in self.platform_manager.platforms:

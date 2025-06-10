@@ -2,10 +2,12 @@ from src.model.DungeonEntity import Direction, AnimationState
 import pygame
 
 
-class DemonBoss:
+class DemonBoss(pygame.sprite.Sprite,):
     """Demon boss enemy class with specialized abilities"""
 
     def __init__(self, x, y):
+        super().__init__()
+
         self.__x = x
         self.__y = y
         self.__width = 128  # Assuming 128x128 sprite size
@@ -17,9 +19,15 @@ class DemonBoss:
         self.__max_health = 500
         self.__health = self.__max_health
         self.__damage = 25
+
         self.__speed = 3  # Slower but powerful
         self.__attack_range = 120
         self.__is_alive = True
+
+        #sprite BACKUP
+        self.image = pygame.Surface((self.width, self.height))
+        self.image.fill((200, 50, 50))  # Red color for boss
+        self.rect = pygame.Rect(x, y, self.width, self.height)
 
         # Animation properties
         self.__direction = Direction.LEFT
@@ -43,7 +51,7 @@ class DemonBoss:
         self.__attack_cooldown = 0
         self.__is_invulnerable = False
         self.__invulnerable_timer = 0
-        self.__hitbox = pygame.Rect(x, y, width=80, height=100)  # Smaller than sprite for better gameplay
+        self.__hitbox = pygame.Rect(x, y, 80, 100)  # Smaller than sprite for better gameplay
         self.__hit_targets = set()
 
         # Boss specific properties
