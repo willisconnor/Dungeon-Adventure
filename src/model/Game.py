@@ -62,7 +62,7 @@ class Game:
         self._transition_manager = RoomTransitionManager(self.width, self.height)
         self._door_manager = DoorInteractionManager()
 
-        #Room transition state
+        # Room transition state
         self._pending_door = None
         self._transition_in_progress = False
 
@@ -91,7 +91,7 @@ class Game:
         self._background_color = (50, 50, 80)
 
         # Load assets
-        #self._tileset = self._load_tileset()
+        # self._tileset = self._load_tileset()
 
     def _load_tileset(self):
         """Load the game tileset"""
@@ -160,7 +160,7 @@ class Game:
         """Initialize or reset the game state"""
         self.cleanup()
         self._initialize_dungeon()
-        
+
         if self._current_room:
             start_x, start_y = self._dungeon_manager.get_player_spawn_position_for_current_room()
 
@@ -174,11 +174,11 @@ class Game:
         if not self._selected_hero_type:
             raise ValueError("Hero must be selected before initializing dungeon")
 
-
-        self._dungeon_manager = DungeonManager((3,3), "assets/levels/flat-tileset.csv","assets/environment/old-dark-castle-interior-tileset.png")
+        self._dungeon_manager = DungeonManager((3, 3), "assets/levels/flat-tileset.csv",
+                                               "assets/environment/old-dark-castle-interior-tileset.png")
 
         self._current_room = self._dungeon_manager.get_current_room()
-        
+
         if not self._current_room:
             raise RuntimeError("Failed to initialize dungeon room")
 
@@ -186,7 +186,7 @@ class Game:
 
     def _setup_door_requirements(self):
         """setup door lock requirements for boss room"""
-        for row in range(self._dungeon_manager.get_dungeon_width()): #assuming 3x3 dingeon size
+        for row in range(self._dungeon_manager.get_dungeon_width()):  # assuming 3x3 dingeon size
             for col in range(self._dungeon_manager.get_dungeon_height()):
                 pass
 
@@ -209,11 +209,11 @@ class Game:
         """Handle events with validation"""
         if not event:
             return
-            
+
         if event.type == pygame.QUIT:
             self.running = False
             return
-            
+
         if event.type == pygame.KEYDOWN:
             if self.state == GameState.HERO_SELECT:
                 self._handle_hero_select_input(event.key)
@@ -274,23 +274,21 @@ class Game:
 
         self._transition_manager.update(dt)
 
-        #enforce room bounds
+        # enforce room bounds
         self._enforce_room_bounds()
 
-        #only process input and movement when not transitioning
+        # only process input and movement when not transitioning
         if not self._transition_manager.is_transitioning:
             if self._active_hero and self._active_hero.is_alive:
-
-                #store previous position for door colission detection
+                # store previous position for door colission detection
                 prev_x = self._active_hero.x
                 prev_y = self._active_hero.y
 
-                #handle hero input
+                # handle hero input
                 self._active_hero.handle_input(keys, self._space_pressed)
 
-                #check for door traversal
+                # check for door traversal
                 self._check_door_traversal(prev_x, prev_y)
-
 
             self.all_sprites.update(dt)
             self._handle_collisions()
@@ -367,6 +365,7 @@ class Game:
 
         self._active_hero.x = spawn_x
         self._active_hero.y = spawn_y
+
     def _handle_room_change(self):
         """Handle any room-specific changes when entering a new room"""
         # Clear projectiles from previous room
@@ -456,7 +455,7 @@ class Game:
         """Safely set camera position within bounds"""
         if not self._current_room:
             return
-            
+
         self._camera_x = max(0, min(x, self._current_room.width - self.width))
         self._camera_y = max(0, min(y, self._current_room.height - self.height))
 
@@ -488,15 +487,15 @@ class Game:
         for hero in self.hero_sprites:
             if not hero.is_alive or not hero.is_attacking:
                 continue
-                
+
             attack_hitbox = hero.get_attack_hitbox()
             if not attack_hitbox:
                 continue
-                
+
             for enemy in self.enemy_sprites:
                 if not enemy.is_alive or enemy in hero.hit_targets:
                     continue
-                    
+
                 if hasattr(enemy, 'hitbox') and attack_hitbox.colliderect(enemy.hitbox):
                     damage = hero.calculate_damage(enemy)
                     if enemy.take_damage(damage):
@@ -529,25 +528,25 @@ class Game:
         self.running = True
 
         while self.running:
-            #calc delta time
-            dt = self._clock.tick(60)/1000.0 #60 fps, dt in seconds
+            # calc delta time
+            dt = self._clock.tick(60) / 1000.0  # 60 fps, dt in seconds
 
-            #handle events
+            # handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
                 else:
                     self.handle_event(event)
 
-            #update game state
+            # update game state
             if self.state == GameState.PLAYING:
                 keys = pygame.key.get_pressed()
                 self.update(dt, keys)
 
-            #draw it all
+            # draw it all
             self.draw()
 
-            #update display
+            # update display
             pygame.display.flip()
 
     def draw(self):
@@ -771,7 +770,7 @@ class Game:
         instruction_rect = instruction_text.get_rect(center=(self.width // 2, self.height - 40))
         self.screen.blit(instruction_text, instruction_rect)
 
-    #not used?
+    # not used?
     def _draw_menu(self):
         """Draw the main menu"""
         title_text = self._font.render("DUNGEON HEROES", True, (255, 255, 255))
@@ -826,7 +825,7 @@ class Game:
 
                 pygame.draw.rect(self.screen, color, rect)
 
-        #DRAW FLOOR TILED
+        # DRAW FLOOR TILED
 
         # Draw enemies
         for enemy in self._enemies:
@@ -882,8 +881,6 @@ class Game:
                         color = (150, 150, 150)  # Gray for default
 
                     pygame.draw.rect(self.screen, color, hero_rect)
-
-
 
                 # Highlight active hero
                 if hero == self._active_hero:
@@ -948,19 +945,22 @@ class Game:
         # Health
         if self._active_hero.is_alive:
             health_percent = self._active_hero.health / self._active_hero.max_health
-            health_color = (0, 200, 0) if health_percent > 0.5 else (200, 200, 0) if health_percent > 0.25 else (200, 0, 0)
+            health_color = (0, 200, 0) if health_percent > 0.5 else (200, 200, 0) if health_percent > 0.25 else (200, 0,
+                                                                                                                 0)
             pygame.draw.rect(self.screen, health_color, (bar_x, bar_y, bar_width * health_percent, bar_height))
 
         # Border
         pygame.draw.rect(self.screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
 
         # Health text
-        health_text = self._ui_font.render(f"{self._active_hero.health}/{self._active_hero.max_health}", True, (255, 255, 255))
+        health_text = self._ui_font.render(f"{self._active_hero.health}/{self._active_hero.max_health}", True,
+                                           (255, 255, 255))
         self.screen.blit(health_text, (bar_x + bar_width + 10, bar_y))
 
         # Special cooldown
         if self._active_hero.special_cooldown_remaining > 0:
-            cd_text = self._ui_font.render(f"Special (Q): {self._active_hero.special_cooldown_remaining:.1f}s", True, (200, 200, 200))
+            cd_text = self._ui_font.render(f"Special (Q): {self._active_hero.special_cooldown_remaining:.1f}s", True,
+                                           (200, 200, 200))
             self.screen.blit(cd_text, (10, 70))
         else:
             cd_text = self._ui_font.render("Special (Q): Ready!", True, (0, 255, 0))
@@ -1036,7 +1036,7 @@ class Game:
         quit_rect = quit_text.get_rect(center=(self.width // 2, self.height // 2 + 80))
         self.screen.blit(quit_text, quit_rect)
 
-    #ADD PILLAR COLLECTION
+    # ADD PILLAR COLLECTION
     def _check_pillar_collection(self):
         """Check if hero collects pillars in current room"""
         if not self._current_room or not self._active_hero:
