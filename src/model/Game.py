@@ -38,7 +38,7 @@ class Game:
         self.screen = screen
         self.width = width
         self.height = height
-        self.state = GameState.HERO_SELECT
+        self.state = GameState.PLAYING  # Changed from HERO_SELECT to PLAYING
         self.running = False
 
         # Sprite groups needed for collision detection and rendering
@@ -375,9 +375,7 @@ class Game:
         # Clear screen
         self.screen.fill(self._background_color)
 
-        if self.state == GameState.HERO_SELECT:
-            self._draw_hero_select()
-        elif self.state == GameState.MENU:
+        if self.state == GameState.MENU:
             self._draw_menu()
         elif self.state == GameState.PLAYING:
             # Create a temporary group for camera-adjusted drawing
