@@ -10,9 +10,11 @@ from src.model.cleric import Cleric
 from src.model.DemonBoss import DemonBoss
 from src.model.ProjectileManager import ProjectileManager, ProjectileType
 from src.model.Platform import PlatformManager, Platform
+from src.utils.RoomTransitionManager import RoomTransitionManager, DoorInteractionManager
 from src.utils.SpriteSheetHandler import SpriteManager
 from src.model.DungeonEntity import Direction, AnimationState
-from src.model.RoomDungeonSystem import DungeonManager, Room, Direction as RoomDirection
+from src.model.RoomDungeonSystem import DungeonManager, Room, Direction
+from src.utils.RoomTransitionManager import RoomTransitionManager, DoorInteractionManager, TransitionType
 import random
 
 class HeroType(Enum):
@@ -57,6 +59,15 @@ class Game:
         self.sprite_manager = SpriteManager()
         self.projectile_manager = ProjectileManager()
         self.platform_manager = PlatformManager()
+        self._transition_manager = RoomTransitionManager(self.width, self.height)
+        self._door_manager = DoorInteractionManager()
+
+        #Room transition state
+        self._pending_door = None
+        self._transition_in_progress = False
+
+        self._floor_csv_path = "assets/levels/flat-tileset.csv"
+        self._tileset_path = "assets/environment/old-dark-castle-interior-tileset.png"
 
         # Private implementation details
         self._clock = pygame.time.Clock()
@@ -68,6 +79,7 @@ class Game:
         self._selected_hero_type = None
         self._hero_selection_made = False
         self._space_pressed = False
+
         self._dungeon_manager = None
         self._current_room = None
 
@@ -79,7 +91,7 @@ class Game:
         self._background_color = (50, 50, 80)
 
         # Load assets
-        self._tileset = self._load_tileset()
+        #self._tileset = self._load_tileset()
 
     def _load_tileset(self):
         """Load the game tileset"""
@@ -151,9 +163,7 @@ class Game:
         
         if self._current_room:
             start_x = self._current_room.width // 2
-            tiles_high = self._current_room.height // self._current_room.tile_height
-            floor_y_pixels = (tiles_high - 4) * self._current_room.tile_height
-            start_y = floor_y_pixels - 60
+            start_y = self._current_room.height - 60
 
             hero = self._create_hero(self._selected_hero_type, start_x, start_y)
             if hero:
@@ -164,12 +174,22 @@ class Game:
         """Initialize dungeon with validation"""
         if not self._selected_hero_type:
             raise ValueError("Hero must be selected before initializing dungeon")
-        
-        self._dungeon_manager = DungeonManager((3,3), "assets/levels/flat-tileset.tmx")
+
+
+        self._dungeon_manager = DungeonManager((3,3), "assets/levels/flat-tileset.csv","assets/environment/old-dark-castle-interior-tileset.png")
+
         self._current_room = self._dungeon_manager.get_current_room()
         
         if not self._current_room:
             raise RuntimeError("Failed to initialize dungeon room")
+
+        self._setup_door_requirements()
+
+    def _setup_door_requirements(self):
+        """setup door lock requirements for boss room"""
+        for row in range(self._dungeon_manager.get_dungeon_width()): #assuming 3x3 dingeon size
+            for col in range(self._dungeon_manager.get_dungeon_height()):
+                pass
 
     def cleanup(self):
         """Cleanup game resources properly"""
@@ -253,14 +273,173 @@ class Game:
         if self.state != GameState.PLAYING:
             return
 
-        if self._active_hero and self._active_hero.is_alive:
-            self._active_hero.handle_input(keys, self._space_pressed)
+        self._transition_manager.update(dt)
 
-        self.all_sprites.update(dt)
-        self._handle_collisions()
-        self._update_game_objects(dt)
-        self._update_camera()
-        self._check_game_state()
+        #enforce room bounds
+        self._enforce_room_bounds()
+
+        #only process input and movement when not transitioning
+        if not self._transition_manager.is_transitioning:
+            if self._active_hero and self._active_hero.is_alive:
+
+                #store previous position for door colission detection
+                prev_x = self._active_hero.x
+                prev_y = self._active_hero.y
+
+                #handle hero input
+                self._active_hero.handle_input(keys, self._space_pressed)
+
+                #check for door traversal
+                self._check_door_traversal(prev_x, prev_y)
+
+
+            self.all_sprites.update(dt)
+            self._handle_collisions()
+            self._update_game_objects(dt)
+            self._update_camera()
+            self._check_game_state()
+
+
+    def _check_door_traversal(self, prev_x: int, prev_y: int):
+        """Check if hero has moved into a door and handle traversal"""
+        if not self._current_room or not self._active_hero:
+            return
+
+        # Get door at hero's current position
+        door = self._current_room.get_door_at_position(
+            self._active_hero.x,
+            self._active_hero.y,
+            self._active_hero.width,
+            self._active_hero.height
+        )
+
+        if door:
+            current_pos = self._dungeon_manager.get_current_room_position()
+
+            # Check if player can use this door
+            if self._door_manager.can_use_door(current_pos, door.direction):
+                # Start room transition
+                self._start_room_transition(door)
+            else:
+                # Door is locked - show message and prevent movement
+                self._show_door_locked_message(current_pos, door.direction)
+                # Reset hero to previous position
+                self._active_hero.x = prev_x
+                self._active_hero.y = prev_y
+
+    def _start_room_transition(self, door):
+        """Start a room transition through the given door"""
+        if self._transition_manager.is_transitioning:
+            return  # Already transitioning
+
+        # Store door for use in transition callback
+        self._pending_door = door
+
+        # Start fade transition
+        self._transition_manager.start_transition(
+            transition_type=TransitionType.FADE,
+            duration=0.8,  # 0.8 seconds total
+            callback=self._complete_room_transition
+        )
+
+    def _complete_room_transition(self):
+        """Called at the midpoint of room transition to actually change rooms"""
+        if not self._pending_door:
+            return
+
+        # Actually move to the new room
+        success = self._dungeon_manager.try_enter_door(
+            self._active_hero.x,
+            self._active_hero.y
+        )
+
+        if success:
+            # Update current room reference
+            self._current_room = self._dungeon_manager.get_current_room()
+
+            # Reposition hero in the new room
+            self._reposition_hero_after_door_traversal()
+
+            # Clear any room-specific enemies/items if needed
+            self._handle_room_change()
+
+        # Clear pending door
+        self._pending_door = None
+
+    def _reposition_hero_after_door_traversal(self):
+        """Reposition hero after entering a door"""
+        if not self._active_hero or not self._current_room:
+            return
+
+        # Get current room doors to determine where hero came from
+        current_pos = self._dungeon_manager.get_current_room_position()
+        doors = self._current_room.doors
+
+        # Position hero near the appropriate door
+        if Direction.LEFT in doors:
+            # Hero came from right, position near left door
+            self._active_hero.x = 100
+        elif Direction.RIGHT in doors:
+            # Hero came from left, position near right door
+            self._active_hero.x = self._current_room.width - 100
+        else:
+            # Default to center
+            self._active_hero.x = self._current_room.width // 2
+
+        # Always position on floor
+        self._active_hero.y = self._current_room.floor_y - 60
+
+    def _handle_room_change(self):
+        """Handle any room-specific changes when entering a new room"""
+        # Clear projectiles from previous room
+        self.projectile_manager.projectiles.clear()
+
+        # Spawn enemies for new room if needed
+        self._spawn_room_enemies()
+
+        # Handle any room-specific items or events
+        if self._current_room.is_boss_room():
+            self._handle_boss_room_entry()
+
+    def _spawn_room_enemies(self):
+        """Spawn enemies appropriate for the current room"""
+        if not self._current_room:
+            return
+
+        # Clear existing enemies
+        self._enemies.clear()
+        self.enemy_sprites.empty()
+
+        # Example enemy spawning logic
+        if self._current_room.is_boss_room():
+            # Spawn boss
+            boss = DemonBoss(self._current_room.width // 2, self._current_room.floor_y - 100)
+            self._enemies.append(boss)
+            self.enemy_sprites.add(boss)
+            self.all_sprites.add(boss)
+        elif not self._current_room.is_start_room():
+            # Spawn regular enemies
+            import random
+            num_enemies = random.randint(1, 3)
+            for i in range(num_enemies):
+                # Use your monster factory here
+                enemy_x = random.randint(100, self._current_room.width - 100)
+                enemy_y = self._current_room.floor_y - 60
+                # Create enemy using your existing system
+                # enemy = create_random_enemy(enemy_x, enemy_y)
+                # self._enemies.append(enemy)
+
+    def _show_door_locked_message(self, room_pos, direction):
+        """Show a message when a door is locked"""
+        message = self._door_manager.get_door_requirement_message(room_pos, direction)
+        if message:
+            print(f"Door locked: {message}")  # Replace with your UI system
+            # You could also show this in your game's UI
+
+    def _handle_boss_room_entry(self):
+        """Handle special logic when entering boss room"""
+        print("Entered boss chamber!")
+        # Add dramatic music, special effects, etc.
 
     def _update_game_objects(self, dt):
         """Update all game objects"""
@@ -277,17 +456,23 @@ class Game:
         self.platform_manager.update(dt)
 
     def _update_camera(self):
-        """Update camera position to follow active hero"""
-        if not self._active_hero:
+        """Update camera position to follow active hero with room bounds"""
+        if not self._active_hero or not self._current_room:
             return
-            
+
         target_x = self._active_hero.x - self.width // 2
         target_y = self._active_hero.y - self.height // 2
-        
-        self._set_camera_position(
-            self._camera_x + (target_x - self._camera_x) * 0.1,
-            self._camera_y + (target_y - self._camera_y) * 0.1
-        )
+
+        # Smooth camera following
+        new_x = self._camera_x + (target_x - self._camera_x) * 0.1
+        new_y = self._camera_y + (target_y - self._camera_y) * 0.1
+
+        # Constrain camera to room bounds
+        max_x = max(0, self._current_room.width - self.width)
+        max_y = max(0, self._current_room.height - self.height)
+
+        self._camera_x = max(0, min(new_x, max_x))
+        self._camera_y = max(0, min(new_y, max_y))
 
     def _set_camera_position(self, x, y):
         """Safely set camera position within bounds"""
@@ -297,11 +482,28 @@ class Game:
         self._camera_x = max(0, min(x, self._current_room.width - self.width))
         self._camera_y = max(0, min(y, self._current_room.height - self.height))
 
+    def _handle_hero_floor_collision(self):
+        """Ensure heroes stay on the floor"""
+        if not self._current_room:
+            return
+
+        floor_y = self._current_room.floor_y
+
+        for hero in self._heroes.values():
+            if hero.get_is_alive():
+                # Keep hero above floor
+                if hero.get_y() + hero.height > floor_y:
+                    hero.y = floor_y - hero.height
+                    # Reset vertical velocity if hero has physics
+                    if hasattr(hero, 'velocity_y'):
+                        hero.velocity_y = 0
+
     def _handle_collisions(self):
         """Handle all collisions"""
         self._handle_hero_enemy_collisions()
         self._handle_projectile_collisions()
         self._handle_platform_collisions()
+        self._handle_hero_floor_collision()
 
     def _handle_hero_enemy_collisions(self):
         """Handle hero and enemy collisions"""
@@ -379,7 +581,10 @@ class Game:
             self._draw_menu()
         elif self.state == GameState.PLAYING:
             # Create a temporary group for camera-adjusted drawing
+
             visible_sprites = pygame.sprite.Group()
+
+
 
             # Draw layers in order
             for layer in [self.background_sprites, self.midground_sprites, self.foreground_sprites]:
@@ -394,8 +599,9 @@ class Game:
                             sprite.image,
                             (sprite.rect.x - self._camera_x, sprite.rect.y - self._camera_y)
                         )
-            self._draw_game()
+            self._draw_game_world()
             self._draw_ui()
+            self._transition_manager.draw_transition(self.screen)
 
         elif self.state == GameState.PAUSED:
             self._draw_game()  # Draw game in background
@@ -406,6 +612,138 @@ class Game:
 
         elif self.state == GameState.VICTORY:
             self._draw_victory()
+
+    def _draw_game_world(self):
+        """Draw game world"""
+        if self._current_room:
+            self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
+
+        self._draw_platforms()
+        self._draw_enemies()
+        self._draw_heroes()
+        self._draw_projectiles()
+        self._draw_room_objects()
+
+    def _draw_platforms(self):
+        """Draw platforms with camera offset"""
+        for platform in self.platform_manager.platforms:
+            if not platform.broken:
+                rect = pygame.Rect(
+                    platform.rect.x - self._camera_x,
+                    platform.rect.y - self._camera_y,
+                    platform.rect.width,
+                    platform.rect.height
+                )
+
+                # Different colors for different platform types
+                if platform.is_one_way:
+                    color = (100, 100, 200)
+                elif platform.is_moving:
+                    color = (200, 100, 100)
+                elif platform.is_breakable:
+                    color = (150, 150, 100)
+                else:
+                    color = (100, 100, 100)
+
+                pygame.draw.rect(self.screen, color, rect)
+
+    def _draw_enemies(self):
+        """Draw enemies with camera offset"""
+        for enemy in self._enemies:
+            if enemy.is_alive:
+                # Draw enemy body
+                enemy_rect = pygame.Rect(
+                    enemy.x - self._camera_x,
+                    enemy.y - self._camera_y,
+                    enemy.width,
+                    enemy.height
+                )
+                color = (200, 50, 50) if not enemy.is_invulnerable else (255, 150, 150)
+                pygame.draw.rect(self.screen, color, enemy_rect)
+
+                # Draw health bar
+                health_percent = enemy.health / enemy.max_health
+                bar_width = enemy.width
+                bar_height = 5
+                bar_x = enemy.x - self._camera_x
+                bar_y = enemy.y - self._camera_y - 10
+
+                pygame.draw.rect(self.screen, (100, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+                pygame.draw.rect(self.screen, (0, 200, 0), (bar_x, bar_y, bar_width * health_percent, bar_height))
+
+    def _draw_heroes(self):
+        """Draw heroes with camera offset"""
+        for hero in self._heroes.values():
+            if hero.get_is_alive():
+                # Calculate screen position
+                screen_x = hero.get_x() - self._camera_x
+                screen_y = hero.get_y() - self._camera_y
+
+                # Draw sprite if available
+                current_sprite = hero.get_current_sprite()
+                if current_sprite:
+                    self.screen.blit(current_sprite, (screen_x, screen_y))
+                else:
+                    # Fallback: colored rectangle
+                    hero_rect = pygame.Rect(screen_x, screen_y, hero.width, hero.height)
+                    hero_type = hero.get_hero_type()
+
+                    if hero_type == "knight":
+                        color = (100, 100, 200)
+                    elif hero_type == "archer":
+                        color = (100, 200, 100)
+                    elif hero_type == "cleric":
+                        color = (200, 100, 100)
+                    else:
+                        color = (150, 150, 150)
+
+                    pygame.draw.rect(self.screen, color, hero_rect)
+
+                # Highlight active hero
+                if hero == self._active_hero:
+                    highlight_rect = pygame.Rect(screen_x, screen_y, hero.width, hero.height)
+                    pygame.draw.rect(self.screen, (255, 255, 0), highlight_rect, 3)
+
+                # Draw attack hitbox for debugging
+                if hero.is_attacking:
+                    attack_hitbox = hero.get_attack_hitbox()
+                    if attack_hitbox:
+                        debug_rect = pygame.Rect(
+                            attack_hitbox.x - self._camera_x,
+                            attack_hitbox.y - self._camera_y,
+                            attack_hitbox.width,
+                            attack_hitbox.height
+                        )
+                        pygame.draw.rect(self.screen, (255, 255, 0), debug_rect, 1)
+
+    def _draw_projectiles(self):
+        """Draw projectiles with camera offset"""
+        for projectile in self.projectile_manager.projectiles:
+            if projectile.active:
+                proj_rect = pygame.Rect(
+                    projectile.x - self._camera_x,
+                    projectile.y - self._camera_y,
+                    projectile.width,
+                    projectile.height
+                )
+
+                # Different colors for different projectile types
+                from src.model.ProjectileManager import ProjectileType
+                if projectile.projectile_type == ProjectileType.ARROW:
+                    color = (200, 200, 100)
+                else:  # Fireball
+                    color = (255, 100, 0)
+
+                pygame.draw.rect(self.screen, color, proj_rect)
+
+    def _draw_room_objects(self):
+        """Draw room-specific objects like pillars, chests, etc."""
+        if not self._current_room:
+            return
+
+        # Draw pillars if present (example from your original room system)
+        # You'd need to adapt this to your pillar system
+        pass
 
     def _draw_hero_select(self):
         """Draw hero selection screen"""
@@ -503,6 +841,9 @@ class Game:
 
     def _draw_game(self):
         """Draw the game world"""
+        if self._current_room:
+            self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
+
         # Draw platforms
         for platform in self.platform_manager.platforms:
             if not platform.broken:
@@ -681,6 +1022,12 @@ class Game:
             self.screen.blit(text, text_rect)
             y_offset += 20
 
+        # Display room position
+        if self._dungeon_manager:
+            room_pos = self._dungeon_manager.get_current_room_position()
+            pos_text = self._ui_font.render(f"Room: ({room_pos[0]}, {room_pos[1]})", True, (255, 255, 255))
+            self.screen.blit(pos_text, (10, self.height - 30))
+
     def _draw_pause_overlay(self):
         """Draw pause screen overlay"""
         # Semi-transparent overlay
@@ -729,3 +1076,46 @@ class Game:
         quit_text = self._ui_font.render("Press ESC to Quit", True, (150, 200, 150))
         quit_rect = quit_text.get_rect(center=(self.width // 2, self.height // 2 + 80))
         self.screen.blit(quit_text, quit_rect)
+
+    #ADD PILLAR COLLECTION
+    def _check_pillar_collection(self):
+        """Check if hero collects pillars in current room"""
+        if not self._current_room or not self._active_hero:
+            return
+
+        # This is pseudocode
+        # if self._current_room.try_collect_pillar(self._active_hero.x, self._active_hero.y):
+        #     self._door_manager.add_to_inventory("pillar")
+        #     print("Pillar collected!")
+
+    # ADDITIONAL HELPER METHODS
+
+    def unlock_boss_doors(self):
+        """Unlock boss room doors when requirements are met"""
+        # Remove door requirements for boss rooms
+        pass
+
+    def get_transition_progress(self) -> float:
+        """Get current transition progress for UI effects"""
+        return self._transition_manager.transition_progress
+
+    def is_transitioning(self) -> bool:
+        """Check if currently transitioning between rooms"""
+        return self._transition_manager.is_transitioning
+
+    def _enforce_room_bounds(self):
+        """Keep hero within room boundaries"""
+        if not self._active_hero or not self._current_room:
+            return
+
+        # Left boundary
+        if self._active_hero.x < 0:
+            self._active_hero.x = 0
+
+        # Right boundary
+        if self._active_hero.x + self._active_hero.width > self._current_room.width:
+            self._active_hero.x = self._current_room.width - self._active_hero.width
+
+        # Floor boundary
+        if self._active_hero.y + self._active_hero.height > self._current_room.floor_y:
+            self._active_hero.y = self._current_room.floor_y - self._active_hero.height

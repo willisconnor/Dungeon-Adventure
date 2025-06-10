@@ -19,155 +19,377 @@ class Direction(Enum):
     LEFT = (-1, 0)
     RIGHT = (1, 0)
 
-class DoorPosition:
-    """Represents a doors position and destination in a room"""
-    def  __init__(self, x: int, y: int, direction: Direction, dest_room: Tuple[int, int] = None):
-        self.x = x
-        self.y = y
-        self.direction = direction
-        self.dest_room = dest_room #(row, col) in grid
-        self.rect = pygame.Rect(x, y, 32, 32)
+class FloorRenderer:
+    """handles floor tile rendering"""
+    def __init__(self, csv_file_path: str, tile_size: int = 16):
+        self.__tile_size = tile_size
+        self.__floor_pattern = self.__load_floor_pattern(csv_file_path)
+        self.__cached_floor_surface = None
+        self.__cached_room_size = None
+
+    def __load_floor_pattern(self, csv_file_path: str) -> List[List[int]]:
+        try:
+            pattern = []
+            with open(csv_file_path, 'r') as file:
+                csv_reader = csv.reader(file)
+                for row in csv_reader:
+                    if row:  # Skip empty rows
+                        # Convert to integers, handle empty cells as 0
+                        tile_row = []
+                        for cell in row:
+                            try:
+                                tile_row.append(int(cell) if cell.strip() else 0)
+                            except ValueError:
+                                tile_row.append(0)
+                        pattern.append(tile_row)
+
+            if not pattern:
+                # Fallback pattern if CSV is empty or invalid
+                return [[1, 2], [3, 4]]
+
+            return pattern
+        except FileNotFoundError:
+            print(f"Warning: Floor pattern file {csv_file_path} not found. Using default pattern.")
+            # Return a simple 2x2 pattern as fallback
+            return [[1, 2], [3, 4]]
+
+    def generate_floor_surface(self, room_width: int, room_height: int, tileset: pygame.Surface) -> pygame.Surface:
+        #check if we can use a cached surface
+        if (self.__cached_floor_surface and
+                self.__cached_room_size == (room_width, room_height)):
+            return self.__cached_floor_surface
+
+        # Create new floor surface
+        floor_surface = pygame.Surface((room_width, room_height))
+
+        # Calculate how many pattern repetitions we need
+        pattern_width = len(self.__floor_pattern[0]) * self.__tile_size
+        pattern_height = len(self.__floor_pattern) * self.__tile_size
+
+        tiles_x = (room_width // pattern_width) + 2
+        tiles_y = (room_height // pattern_height) + 2
+
+        # Tile the pattern across the room
+        for pattern_x in range(tiles_x):
+            for pattern_y in range(tiles_y):
+                self.__draw_pattern_at_position(
+                    floor_surface,
+                    tileset,
+                    pattern_x * pattern_width,
+                    pattern_y * pattern_height
+                )
+
+        # Cache the result
+        self.__cached_floor_surface = floor_surface
+        self.__cached_room_size = (room_width, room_height)
+
+        return floor_surface
+
+    def __draw_pattern_at_position(self, surface: pygame.Surface, tileset: pygame.Surface, x: int, y: int):
+        #draw floor pattern at a specific position
+        for row_idx, row in enumerate(self.__floor_pattern):
+            for col_idx, tile_id in enumerate(row):
+                if tile_id > 0:
+                    tile_x = col_idx * self.__tile_size
+                    tile_y = row_idx * self.__tile_size
+                    #only draw if within surface bounds
+                    if (tile_x < surface.get_width() and tile_y < surface.get_height()):
+                        self.__draw_tile(surface, tileset, tile_id, tile_x, tile_y)
+
+    def __draw_tile(self, surface: pygame.Surface, tileset: pygame.Surface, tile_id: int, x: int, y: int):
+        if tile_id <- 0:
+            return
+
+        tileset_width_in_tiles = tileset.get_width() // self.__tile_size
+        tile_x_in_tileset = ((tile_id - 1) % tileset_width_in_tiles) * self.__tile_size
+        tile_y_in_tileset = ((tile_id - 1) // tileset_width_in_tiles) * self.__tile_size
+
+        #extract tile from tileset
+        tile_rect = pygame.Rect(tile_x_in_tileset, tile_y_in_tileset, self.__tile_size, self.__tile_size)
+
+        #draw tile to surface
+        try:
+            surface.blit(tileset, (x, y), tile_rect)
+        except:
+            print(f"Error drawing tile {tile_id} at position {x}, {y}")
+
+class Door:
+    """Represents a door"""
+
+    def __init__(self, x: int, y: int, direction: Direction, dest_room: Tuple[int, int], width: int = 64,
+                 height: int = 32):
+        """
+        Initialize a door
+
+        Args:
+            x: X position of door
+            y: Y position of door
+            direction: Direction the door faces
+            dest_room: Grid position of destination room
+            width: Width of door
+            height: Height of door
+        """
+        self.__x = x
+        self.__y = y
+        self.__direction = direction
+        self.__dest_room = dest_room
+        self.__width = width
+        self.__height = height
+        self.__rect = pygame.Rect(x, y, width, height)
+        self.__is_locked = False
+
+    @property
+    def x(self) -> int:
+        """Get door X position"""
+        return self.__x
+
+    @property
+    def y(self) -> int:
+        """Get door Y position"""
+        return self.__y
+
+    @property
+    def direction(self) -> Direction:
+        """Get door direction"""
+        return self.__direction
+
+    @property
+    def dest_room(self) -> Tuple[int, int]:
+        """Get destination room coordinates"""
+        return self.__dest_room
+
+    @property
+    def rect(self) -> pygame.Rect:
+        """Get door collision rectangle"""
+        return self.__rect.copy()
+
+    @property
+    def is_locked(self) -> bool:
+        """Check if door is locked"""
+        return self.__is_locked
+
+    def lock(self):
+        """Lock the door"""
+        self.__is_locked = True
+
+    def unlock(self):
+        """Unlock the door"""
+        self.__is_locked = False
+
+    def check_collision(self, entity_rect: pygame.Rect) -> bool:
+        """
+        Check if an entity collides with this door
+
+        Args:
+            entity_rect: Rectangle representing entity position
+
+        Returns:
+            True if collision detected
+        """
+        return self.__rect.colliderect(entity_rect)
+
+    def draw(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
+        """
+        Draw the door
+
+        Args:
+            surface: Surface to draw on
+            camera_offset: Camera offset for scrolling
+        """
+        draw_x = self.__x - camera_offset[0]
+        draw_y = self.__y - camera_offset[1]
+
+        # Choose color based on lock status
+        color = (100, 100, 100) if self.__is_locked else (139, 69, 19)  # Gray if locked, brown if unlocked
+
+        # Draw door
+        pygame.draw.rect(surface, color, (draw_x, draw_y, self.__width, self.__height))
+
+        # Draw door frame
+        pygame.draw.rect(surface, (160, 82, 45), (draw_x, draw_y, self.__width, self.__height), 3)
 
 class Room:
     """represents a single room"""
-    def __init__(self, grid_pos: Tuple[int, int], tile_data: List[List[int]] = None, tile_width: int = 16, tile_height: int = 16):
-        self.grid_pos = grid_pos #row col
-        self.tile_data = tile_data
-        self.tile_width = tile_width
-        self.tile_height = tile_height
-        self.width = 1600
-        self.height = 600 #2x screen
+    def __init__(self, grid_pos: Tuple[int, int], width: int = 1600, height: int = 600, tile_size: int = 16):
+        self.__grid_pos = grid_pos
+        self.__width = width
+        self.__height = height
+        self.__tile_size = tile_size
+        self.__doors: Dict[Direction, Door] = {}
+        self.__floor_surface = None
+        self.__background_surface = None
 
-        if tile_data is None:
-            self._generate_room_layout()
-        else:
-            self.tile_data = tile_data
-            self.width = len(tile_data[0]) * tile_width
-            self.height = len(tile_data[1]) * tile_height
+        # Room properties
+        self.__has_pillar = False
+        self.__pillar_collected = False
+        self.__pillar_rect = None
+        self.__is_boss_room = False
+        self.__is_start_room = False
 
-        self.doors: Dict[Direction, DoorPosition] = {}
-        self.has_pillar = False
-        self.pillar_collected = False
-        self.pillar_rect = None
-        self.is_boss_room = False
-        self.is_start_room = False
+        # Calculate floor Y position (bottom 20% of room)
+        self.__floor_y = int(height * 0.8)
+        self.__floor_height = height - self.__floor_y
 
-        #Door positions, adjust if  change tilemap. updated for larger size rooms
-        self.door_positions = {
-            Direction.UP: (self.width // 2- 16, 16),
-            Direction.DOWN: (self.width // 2-16, self.height -48),
-            Direction.LEFT: (16, self.height // 2-16),
-            Direction.RIGHT: (self.width -48, self.height //2 -16)
-        }
+    @property
+    def grid_pos(self) -> Tuple[int, int]:
+        """Get room grid position"""
+        return self.__grid_pos
 
+    @property
+    def width(self) -> int:
+        """Get room width"""
+        return self.__width
 
-    def _generate_room_layout(self):
-        """generate tile data for a larger room"""
-        tiles_wide = self.width //self.tile_width # 50 tiles wide
-        tiles_high = self.height //self.tile_height
-        #create empty room
-        self.tile_data = [[0 for _ in range(tiles_wide)]for _ in range (tiles_high)]
+    @property
+    def height(self) -> int:
+        """Get room height"""
+        return self.__height
 
-        #calculat the correc ttile ID's for the ones i want
-        #tileset is 52 tiles wide 832/16
-        tiles_per_row = 52
+    @property
+    def floor_y(self) -> int:
+        """Get Y position where floor starts"""
+        return self.__floor_y
 
-        #floor tile ids (i want 31-32, 10-13
-        floor_tiles = []
-        for row in range(10, 14):
-            for col in range(31, 33):
-                tile_id = (row * tiles_per_row) + col+1
-                floor_tiles.append(tile_id)
-        #this gives me 604, 656, 657, 708, 709
+    @property
+    def doors(self) -> Dict[Direction, Door]:
+        """Get copy of doors dictionary"""
+        return self.__doors.copy()
 
+    def set_as_boss_room(self):
+        """Mark this room as boss room"""
+        self.__is_boss_room = True
 
-        #add floor tiles assuming tile id 1 is floor
-        floor_y = tiles_high -4 #floor 5 tiles from bot
-        for x in range(tiles_wide):
-            for y in range(floor_y, tiles_high):
-                self.tile_data[y][x] = random.choice([553, 554, 605, 606]) #use appropriate floor tile id
+    def set_as_start_room(self):
+        """Mark this room as start room"""
+        self.__is_start_room = True
 
+    def is_boss_room(self) -> bool:
+        """Check if this is a boss room"""
+        return self.__is_boss_room
 
-        #add walls on sides from diff part of tileset
-        wall_tile = 55
-        for y in range(tiles_high):
-            self.tile_data[y][0] = wall_tile
-            self.tile_data[y][tiles_wide-1] = wall_tile
-
-        #add ceiling
-        for x in range(tiles_wide):
-            self.tile_data[0][x] = wall_tile #celing
+    def is_start_room(self) -> bool:
+        """Check if this is the start room"""
+        return self.__is_start_room
 
     def add_door(self, direction: Direction, dest_room: Tuple[int, int]):
-        """add a door in the specified direction"""
-        pos = self.door_positions[direction]
-        self.doors[direction] = DoorPosition(pos[0], pos[1], direction, dest_room)
+        """
+        Add a door to the room
 
-    def add_pillar(self):
-        """add a pillar in the room"""
-        self.has_pillar = True
-        #place pillar in center
-        pillar_x = self.width//2 -16
-        pillar_y = self.height//2 -16
-        self.pillar_rect = pygame.Rect(pillar_x, pillar_y, 32, 32)
+        Args:
+            direction: Direction the door faces
+            dest_room: Destination room grid coordinates
+        """
+        door_x, door_y = self.__calculate_door_position(direction)
+        door = Door(door_x, door_y, direction, dest_room)
+        self.__doors[direction] = door
 
-    def collect_pillar(self):
-        """collect pillar in the room"""
-        if self.has_pillar and not self.pillar_collected:
-            self.pillar_collected = True
-            return True
-        return False
+    def __calculate_door_position(self, direction: Direction) -> Tuple[int, int]:
+        """
+        Calculate door position based on direction
 
-    def get_door_at_pos(self, x: int, y:int) -> Optional[DoorPosition]:
-        """check if position overlaps with any door"""
-        player_rect = pygame.Rect(x, y, 32, 32) #assuming 32x32 player CHANGEEE
-        for door in self.doors.values():
-            if player_rect.colliderect(door.rect):
+        Args:
+            direction: Direction the door should face
+
+        Returns:
+            (x, y) position for the door
+        """
+        door_width = 64
+        door_height = 32
+
+        if direction == Direction.LEFT:
+            return (0, self.__floor_y - door_height)
+        elif direction == Direction.RIGHT:
+            return (self.__width - door_width, self.__floor_y - door_height)
+        else:
+            # Fallback to center for unsupported directions
+            return (self.__width // 2 - door_width // 2, self.__floor_y - door_height)
+
+    def generate_floor(self, floor_renderer: FloorRenderer, tileset: pygame.Surface):
+        """
+        Generate floor surface for this room
+
+        Args:
+            floor_renderer: FloorRenderer instance
+            tileset: Tileset image
+        """
+        self.__floor_surface = floor_renderer.generate_floor_surface(
+            self.__width, self.__floor_height, tileset
+        )
+
+    def generate_background(self, background_color: Tuple[int, int, int] = (40, 40, 60)):
+        """
+        Generate background surface for this room
+
+        Args:
+            background_color: RGB color for background
+        """
+        self.__background_surface = pygame.Surface((self.__width, self.__height))
+        self.__background_surface.fill(background_color)
+
+        # Add some simple wall decoration
+        wall_color = (60, 60, 80)
+
+        # Left wall
+        pygame.draw.rect(self.__background_surface, wall_color, (0, 0, 32, self.__floor_y))
+        # Right wall
+        pygame.draw.rect(self.__background_surface, wall_color, (self.__width - 32, 0, 32, self.__floor_y))
+        # Top wall
+        pygame.draw.rect(self.__background_surface, wall_color, (0, 0, self.__width, 32))
+
+    def get_door_at_position(self, x: int, y: int, entity_width: int = 32, entity_height: int = 32) -> Optional[Door]:
+        """
+        Check if there's a door at the given position
+
+        Args:
+            x: X position to check
+            y: Y position to check
+            entity_width: Width of entity checking
+            entity_height: Height of entity checking
+
+        Returns:
+            Door object if found, None otherwise
+        """
+        entity_rect = pygame.Rect(x, y, entity_width, entity_height)
+
+        for door in self.__doors.values():
+            if door.check_collision(entity_rect):
                 return door
-            return None
 
-    def draw(self, screen: pygame.Surface, tileset: pygame.Surface, camera_offset: Tuple[int, int] = (0,0)):
-        """draw room tiles"""
+        return None
 
-        #draw only visible tiles
-        start_x = max(0, int(camera_offset[0] // self.tile_width))
-        start_y = max(0, int(camera_offset[1] // self.tile_height))
-        end_x = min(len(self.tile_data[0]), start_x + (screen.get_width()// self.tile_width) + 2)
-        end_y = min(len(self.tile_data), start_y + (screen.get_height() // self.tile_height) + 2)
+    def draw(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
+        """
+        Draw the room including background, floor, and doors
 
-        for y in range(start_y, end_y):
-            for x in range(start_x, end_x):
-                tile_id = self.tile_data[y][x]
-                if tile_id >0: #0 is empty tile
-                    #calc tile position in set
-                    tileset_width = tileset.get_width() // self.tile_width
-                    tile_x = ((tile_id -1) % tileset_width) * self.tile_width
-                    tile_y = ((tile_id - 1) // tileset_width) * self.tile_height
+        Args:
+            surface: Surface to draw on
+            camera_offset: Camera offset for scrolling
+        """
+        # Draw background
+        if self.__background_surface:
+            surface.blit(self.__background_surface, (-camera_offset[0], -camera_offset[1]))
 
-                    #draw tile
-                    screen.blit(tileset, (x * self.tile_width - camera_offset[0],
-                                          y * self.tile_height - camera_offset[1]),
-                                (tile_x, tile_y, self.tile_width, self.tile_height))
+        # Draw floor
+        if self.__floor_surface:
+            floor_draw_y = self.__floor_y - camera_offset[1]
+            surface.blit(self.__floor_surface, (-camera_offset[0], floor_draw_y))
 
-        #draw doors
-        for door in self.doors.values():
-            pygame.draw.rect(screen, (0, 255,0),
-                             (door.x - camera_offset[0], door.y -  camera_offset[1], 32, 32), 2)
-
-        #draw pillar if present and not collecetd
-        if self.has_pillar and not self.pillar_collected:
-            pygame.draw.circle(screen, (255, 255, 0),
-                               self.pillar_rect.centerx - camera_offset[0],
-                               self.pillar_rect.centery - camera_offset[1], 16)
+        # Draw doors
+        for door in self.__doors.values():
+            door.draw(surface, camera_offset)
 
 class DungeonManager:
     """manages the entire dungeon layout an dprogression"""
 
-    def __init__(self, dungeon_size: Tuple[int, int], tmx_file: str):
-        self.grid_width, self.grid_height = dungeon_size
-        self.dungeon_grid: List[List[Optional[Room]]] = [[None for _ in range(self.grid_width)] for _ in range(self.grid_height)]
-        self.current_room_pos: Tuple[int, int] = None
-        self.tmx_file = tmx_file
+    def __init__(self, dungeon_size: Tuple[int, int], floor_csv_path: str, tileset_path: str):
+        self.__grid_width, self.__grid_height = dungeon_size
+        self.__dungeon_grid: List[List[Optional[Room]]] = [[None for _ in range(self.__grid_width)] for _ in range(self.__grid_height)]
+        self.__current_room_pos: Tuple[int, int] = None
+
+        #initialize rendered and assets
+        self.__floor_renderer = FloorRenderer(floor_csv_path)
+        self.__tileset = self.__load_tileset(tileset_path)
+
         self.pillars_collected = 0
         self.boss_defeated = False
 
@@ -175,174 +397,139 @@ class DungeonManager:
         #self.base_tile_data = self._load_tmx_data(tmx_file)
 
         #generate dungeon
-        self._generate_dungeon()
+        self.__generate_dungeon()
 
-    def _load_tmx_data(self, tmx_file:str) -> List[List[int]]:
-        """load tile data from TMX file"""
-        tree = ET.parse(tmx_file)
-        root = tree.getroot()
+    def __load_tileset(self, tileset_path: str) -> pygame.Surface:
+        """
+        Load tileset image
 
-        #get map dimensions
-        width = int(root.get('width'))
-        height = int(root.get('height'))
+        Args:
+            tileset_path: Path to tileset image
 
-        #find the layer data
-        layer = root.find('./layer')
-        data = layer.find('data')
+        Returns:
+            Loaded tileset surface
+        """
+        try:
+            return pygame.image.load(tileset_path).convert_alpha()
+        except pygame.error:
+            print(f"Warning: Could not load tileset from {tileset_path}")
+            # Create a simple fallback tileset
+            fallback = pygame.Surface((128, 128))
+            fallback.fill((100, 100, 100))
+            return fallback
 
-        #parse CSV data
-        csv_data = data.text.strip()
-        tiles = [int(x) for x in csv_data.replace('\n', '').split(',') if x]
+    def __generate_dungeon(self):
+        """Generate the dungeon layout"""
+        # Start in center
+        start_pos = (self.__grid_height // 2, self.__grid_width // 2)
+        self.__current_room_pos = start_pos
 
-        #convert to 2d array
-        tile_data = []
-        for y in range(height):
-            row = tiles[y * width:(y+1) * width]
-            tile_data.append(row)
+        # Create start room
+        start_room = Room(start_pos)
+        start_room.set_as_start_room()
+        self.__initialize_room(start_room)
+        self.__dungeon_grid[start_pos[0]][start_pos[1]] = start_room
 
-        return tile_data
+        # Generate additional rooms
+        self.__generate_connected_rooms(start_pos)
 
-    def _generate_dungeon(self):
-        """generate a connected, completable dungeon with rooms"""
-        #start in center cuz why not
-        start_pos = (self.grid_height // 2, self.grid_width //2)
-        self.current_room_pos = start_pos
-
-        #generate starting room WITHOUT tmx data?
-        start_room = Room(start_pos, None)
-        start_room.is_start_room = True
-        self.dungeon_grid[start_pos[0]][start_pos[1]] = start_room
-
-        #generate connected rooms
+    def __generate_connected_rooms(self, start_pos: Tuple[int, int]):
+        """Generate connected rooms from start position"""
         rooms_to_process = [start_pos]
         created_rooms = {start_pos}
         room_count = 1
-        max_rooms = self.grid_width * self.grid_height //2
+        max_rooms = min(8, self.__grid_width * self.__grid_height // 2)
 
         while rooms_to_process and room_count < max_rooms:
             current = rooms_to_process.pop(0)
-            current_room = self.dungeon_grid[current[0]][current[1]]
+            current_room = self.__dungeon_grid[current[0]][current[1]]
 
-            #try to add 2-4 doors
-            num_doors = random.randint(2,4)
-            directions = list(Direction)
+            # Try to add doors (left and right only)
+            directions = [Direction.LEFT, Direction.RIGHT]
             random.shuffle(directions)
 
-            doors_added = 0
             for direction in directions:
-                if doors_added >= num_doors:
-                    break
+                if random.random() < 0.7:  # 70% chance to add door
+                    new_pos = self.__get_neighbor_position(current, direction)
 
-                #calc neighbor pos
-                dr, dc = direction.value
-                new_pos = (current[0] + dr, current[1] + dc)
+                    if self.__is_valid_position(new_pos) and new_pos not in created_rooms:
+                        # Create new room
+                        new_room = Room(new_pos)
+                        self.__initialize_room(new_room)
+                        self.__dungeon_grid[new_pos[0]][new_pos[1]] = new_room
 
-                #check bounds
-                if (0 <= new_pos[0] < self.grid_height and 0 <= new_pos[1] < self.grid_width):
-                    #create new room or connect to existing rewm
-                    new_room = Room(new_pos, None)
-                    self.dungeon_grid[new_pos[0]][new_pos[1]] = new_room
-                    created_rooms.add(new_pos)
-                    rooms_to_process.append(new_pos)
-                    room_count += 1
+                        # Add doors
+                        current_room.add_door(direction, new_pos)
+                        opposite_dir = self.__get_opposite_direction(direction)
+                        new_room.add_door(opposite_dir, current)
 
-                    #add doorsies
-                    current_room.add_door(direction, new_pos)
-                    opposite_dir = self._get_opposite_direction(direction)
-                    new_room.add_door(opposite_dir, current)
-                    doors_added += 1
+                        created_rooms.add(new_pos)
+                        rooms_to_process.append(new_pos)
+                        room_count += 1
 
-                elif new_pos in created_rooms and new_pos not in [d.dest_room for d in current_room.doors.values()]:
-                    #connect to existing room if not already conencted
-                    neighbor_room = self.dungeon_grid[new_pos[0]][new_pos[1]]
-                    current_room.add_door(direction, new_pos)
-                    opposite_dir = self._get_opposite_direction(direction)
-                    neighbor_room.add_door(opposite_dir, current)
-                    doors_added += 1
+        # Set boss room
+        if len(created_rooms) > 1:
+            room_list = list(created_rooms)
+            room_list.remove(start_pos)
+            boss_pos = random.choice(room_list)
+            self.__dungeon_grid[boss_pos[0]][boss_pos[1]].set_as_boss_room()
 
-        room_list = list(created_rooms)
-        room_list.remove(start_pos) #dont put pillar in start room
+    def __initialize_room(self, room: Room):
+        """Initialize room with floor and background"""
+        room.generate_background()
+        room.generate_floor(self.__floor_renderer, self.__tileset)
 
-        pillar_rooms = random.sample(room_list, min(5, len(room_list)))
-        for room_pos in pillar_rooms:
-            room = self.dungeon_grid[room_pos[0]][room_pos[1]]
-            room.add_pillar()
+    def __get_neighbor_position(self, pos: Tuple[int, int], direction: Direction) -> Tuple[int, int]:
+        """Get neighbor position in given direction"""
+        dr, dc = direction.value
+        return (pos[0] + dr, pos[1] + dc)
 
-        #place boss room at furthest point from the start
-        furthest_room = self._find_furthest_room(start_pos, created_rooms)
-        boss_room = self.dungeon_grid[furthest_room[0]][furthest_room[1]]
-        boss_room.is_boss_room = True
+    def __is_valid_position(self, pos: Tuple[int, int]) -> bool:
+        """Check if position is within grid bounds"""
+        return (0 <= pos[0] < self.__grid_height and 0 <= pos[1] < self.__grid_width)
 
-    def _get_opposite_direction(self, direction: Direction) -> Direction:
-        """get the opposite direction"""
+    def __get_opposite_direction(self, direction: Direction) -> Direction:
+        """Get opposite direction"""
         opposites = {
-            Direction.UP: Direction.DOWN,
-            Direction.DOWN: Direction.UP,
             Direction.LEFT: Direction.RIGHT,
-            Direction.RIGHT: Direction.LEFT,
+            Direction.RIGHT: Direction.LEFT
         }
         return opposites[direction]
 
-    def _find_furthest_room(self, start: Tuple[int, int], rooms: set) -> Tuple[int, int]:
-        """find the furthest room using BFS"""
-        visited = {start}
-        queue = [(start, 0)]
-        furthest = start
-        max_dist = 0
-
-        while queue:
-            pos, dist = queue.pop(0)
-            if dist > max_dist:
-                max_dist = dist
-                furthest = pos
-
-            room = self.dungeon_grid[pos[0]][pos[1]]
-            for door in room.doors.values():
-                if door.dest_room not in visited:
-                    visited.add(door.dest_room)
-                    queue.append((door.dest_room, dist +1))
-        return furthest
-
     def get_current_room(self) -> Room:
-        """get the current room"""
-        return self.dungeon_grid[self.current_room_pos[0]][self.current_room_pos[1]]
+        """Get the current room"""
+        if self.__current_room_pos:
+            return self.__dungeon_grid[self.__current_room_pos[0]][self.__current_room_pos[1]]
+        return None
 
     def try_enter_door(self, player_x: int, player_y: int) -> bool:
-        """try to enter a door at player pos"""
+        """
+        Try to enter a door at player position
+
+        Args:
+            player_x: Player X position
+            player_y: Player Y position
+
+        Returns:
+            True if successfully entered door
+        """
         current_room = self.get_current_room()
-        door = current_room.get_door_at_pos(player_x, player_y)
+        if not current_room:
+            return False
 
-        if door:
-            #check if boss door is locked
-            if door.dest_room:
-                dest_room = self.dungeon_grid[door.dest_room[0]][door.dest_room[1]]
-                if dest_room.is_boss_room and self.pillars_collected <5:
-                    return False #boss door locked
-
-            #move to new room
-            self.current_room_pos = door.dest_room
+        door = current_room.get_door_at_position(player_x, player_y)
+        if door and not door.is_locked:
+            self.__current_room_pos = door.dest_room
             return True
-        return False
-
-    def try_collect_pillar(self, player_x: int, player_y: int) -> bool:
-        """try to collect a pillar at player pos"""
-        current_room = self.get_current_room()
-        if current_room.has_pillar and not current_room.pillar_collected:
-            player_rect = pygame.Rect(player_x, player_y, 32, 32) #change this for sprites
-            if player_rect.colliderect(current_room.pillar_rect):
-                if current_room.collect_pillar():
-                    self.pillars_collected += 1
-                    return True
 
         return False
 
-    def is_game_won(self) -> bool:
-        """check if game is won"""
-        current_room = self.get_current_room()
-        return current_room.is_boss_room and self.boss_defeated
+    def get_current_room_position(self) -> Tuple[int, int]:
+        """Get current room grid position"""
+        return self.__current_room_pos
 
-    def defeat_boss(self):
-        """defeat the boss!!!!!"""
-        current_room = self.get_current_room()
-        if current_room.is_boss_room:
-            self.boss_defeated = True
+    def get_dungeon_width(self):
+        return self.__grid_width
+
+    def get_dungeon_height(self):
+        return self.__grid_height
