@@ -695,8 +695,8 @@ class Room:
             camera_offset: Camera offset for scrolling
         """
         # Draw background
-        if self.__background_surface:
-            surface.blit(self.__background_surface, (-camera_offset[0], -camera_offset[1]))
+        #if self.__background_surface:
+            #surface.blit(self.__background_surface, (-camera_offset[0], -camera_offset[1]))
 
         # Draw floor
         if self.__floor_surface:

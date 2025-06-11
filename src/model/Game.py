@@ -19,6 +19,7 @@ import random
 from src.view.Menu import GameResultMenu
 from src.view.DungeonMinimap import DungeonMinimap, MinimapIntegration, RoomDisplayType
 from src.utils.DungeonConfig import DungeonConfig
+from src.view.BackgroundManager import BackgroundManager
 
 
 class HeroType(Enum):
@@ -109,6 +110,9 @@ class Game:
         minimap_y = self.height - 120  # 120 pixels from bottom (adjust as needed)
         self.__minimap = DungeonMinimap((3, 3), position=(minimap_x, minimap_y))
         self.__minimap_integration = MinimapIntegration(self.__minimap, self._ui_font)
+
+        #bg manager
+        self._background_manager = BackgroundManager("assets/environment/background.png")
 
         # Load assets
         # self._tileset = self._load_tileset()
@@ -686,6 +690,9 @@ class Game:
     def _draw_game_world(self):
         """Draw game world"""
         if self._current_room:
+
+            room_size = (self._current_room.width, self._current_room.height)
+            self._background_manager.draw(self.screen, (self._camera_x, self._camera_y), room_size)
             self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
 
         # Draw pillars

@@ -381,7 +381,7 @@ class MinimapUIManager:
 
     def render_toggle_instruction(self, surface: pygame.Surface, minimap_rect: pygame.Rect) -> None:
         """Render toggle instruction"""
-        instruction_text = "Press M to toggle map"
+        instruction_text = ""
         text_surface = self.__font.render(instruction_text, True, (150, 150, 150))
 
         # Position below exploration stats
