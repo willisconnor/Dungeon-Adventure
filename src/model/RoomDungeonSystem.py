@@ -1,6 +1,7 @@
-#class to handle room generation
+# class to handle room generation
 '''Connor Willis
 6/5/25
+Updated with Pillar support and improved dungeon generation
 '''
 from typing import List, Dict, Tuple, Optional
 import random
@@ -11,21 +12,35 @@ import pygame, csv, os
 from src.model.Item import Item
 from src.model.Monster import Monster
 from src.model.Platform import Platform
+# Add this import at the top of RoomDungeonSystem.py
+from src.model.Pillar import Pillar, PillarType, PillarManager
+
 
 class DoorType(Enum):
-    #Doors based through interaction method
+    # Doors based through interaction method
     WALK_THROUGH = "walk_through"
     INTERACTIVE = "interactive"
 
+
 class Direction(Enum):
-    #for door directions
+    # for door directions
     UP = (0, -1)
     DOWN = (0, 1)
     LEFT = (-1, 0)
     RIGHT = (1, 0)
 
+
+class DungeonTemplate(Enum):
+    """Predefined dungeon layouts for controlled generation"""
+    CROSS = "cross"
+    SQUARE = "square"
+    DEMO = "demo"  # Easy layout for demonstrations
+    FULL = "full"  # All rooms filled
+
+
 class FloorRenderer:
     """handles floor tile rendering"""
+
     def __init__(self, csv_file_path: str, tile_size: int = 16):
         self.__tile_size = tile_size
         self.__floor_pattern = self.__load_floor_pattern(csv_file_path)
@@ -59,7 +74,7 @@ class FloorRenderer:
             return [[1, 2], [3, 4]]
 
     def generate_floor_surface(self, room_width: int, room_height: int, tileset: pygame.Surface) -> pygame.Surface:
-        #check if we can use a cached surface
+        # check if we can use a cached surface
         if (self.__cached_floor_surface and
                 self.__cached_room_size == (room_width, room_height)):
             return self.__cached_floor_surface
@@ -91,13 +106,13 @@ class FloorRenderer:
         return floor_surface
 
     def __draw_pattern_at_position(self, surface: pygame.Surface, tileset: pygame.Surface, x: int, y: int):
-        #draw floor pattern at a specific position
+        # draw floor pattern at a specific position
         for row_idx, row in enumerate(self.__floor_pattern):
             for col_idx, tile_id in enumerate(row):
                 if tile_id > 0:
                     tile_x = col_idx * self.__tile_size
                     tile_y = row_idx * self.__tile_size
-                    #only draw if within surface bounds
+                    # only draw if within surface bounds
                     if (tile_x < surface.get_width() and tile_y < surface.get_height()):
                         self.__draw_tile(surface, tileset, tile_id, tile_x, tile_y)
 
@@ -109,10 +124,10 @@ class FloorRenderer:
         tile_x_in_tileset = ((tile_id - 1) % tileset_width_in_tiles) * self.__tile_size
         tile_y_in_tileset = ((tile_id - 1) // tileset_width_in_tiles) * self.__tile_size
 
-        #extract tile from tileset
+        # extract tile from tileset
         tile_rect = pygame.Rect(tile_x_in_tileset, tile_y_in_tileset, self.__tile_size, self.__tile_size)
 
-        #draw tile to surface
+        # draw tile to surface
         try:
             surface.blit(tileset, (x, y), tile_rect)
         except:
@@ -174,8 +189,9 @@ class Door:
         self.__width = 64
         self.__height = 96
         self.__is_locked = False
+        self.__lock_message = ""
 
-        #determine door type based on direction
+        # determine door type based on direction
         self.__door_type = (DoorType.INTERACTIVE
                             if direction in [Direction.UP, Direction.DOWN]
                             else DoorType.WALK_THROUGH)
@@ -265,13 +281,19 @@ class Door:
         """Get door interaction type"""
         return self.__door_type
 
-    def lock(self):
-        """Lock the door"""
+    def lock(self, message: str = ""):
+        """Lock the door with optional message"""
         self.__is_locked = True
+        self.__lock_message = message
 
     def unlock(self):
         """Unlock the door"""
         self.__is_locked = False
+        self.__lock_message = ""
+
+    def get_lock_message(self) -> str:
+        """Get lock message"""
+        return self.__lock_message
 
     def check_collision(self, entity_rect: pygame.Rect) -> bool:
         """
@@ -299,10 +321,14 @@ class Door:
             player_rect = pygame.Rect(player_x, player_y, player_width, player_height)
             is_nearby = self.check_collision(player_rect)
 
-            self.__interaction_state.set_player_nearby(
-                is_nearby,
-                self.__interaction_prompt if is_nearby and not self.__is_locked else ""
-            )
+            if is_nearby and self.__is_locked and self.__lock_message:
+                prompt_text = self.__lock_message
+            elif is_nearby and not self.__is_locked:
+                prompt_text = self.__interaction_prompt
+            else:
+                prompt_text = ""
+
+            self.__interaction_state.set_player_nearby(is_nearby, prompt_text)
         else:
             # Walk-through doors don't need proximity tracking
             self.__interaction_state.set_player_nearby(False)
@@ -427,6 +453,7 @@ class Door:
 
 class Room:
     """represents a single room"""
+
     def __init__(self, grid_pos: Tuple[int, int], width: int = 1600, height: int = 600, tile_size: int = 16):
         self.__grid_pos = grid_pos
         self.__width = width
@@ -680,26 +707,33 @@ class Room:
         for door in self.__doors.values():
             door.draw(surface, camera_offset)
 
+
 class DungeonManager:
     """manages the entire dungeon layout an dprogression"""
 
-    def __init__(self, dungeon_size: Tuple[int, int], floor_csv_path: str, tileset_path: str):
+    def __init__(self, dungeon_size: Tuple[int, int], floor_csv_path: str, tileset_path: str,
+                 template: DungeonTemplate = DungeonTemplate.SQUARE):
         self.__grid_width, self.__grid_height = dungeon_size
-        self.__dungeon_grid: List[List[Optional[Room]]] = [[None for _ in range(self.__grid_width)] for _ in range(self.__grid_height)]
+        self.__dungeon_grid: List[List[Optional[Room]]] = [[None for _ in range(self.__grid_width)] for _ in
+                                                           range(self.__grid_height)]
         self.__current_room_pos: Tuple[int, int] = None
         self.__previous_room_pos: Optional[Tuple[int, int]] = None
+        self.__template = template
 
-        #initialize rendered and assets
+        # initialize rendered and assets
         self.__floor_renderer = FloorRenderer(floor_csv_path)
         self.__tileset = self.__load_tileset(tileset_path)
+
+        # Initialize pillar manager
+        self.__pillar_manager = PillarManager()
 
         self.pillars_collected = 0
         self.boss_defeated = False
 
-        #load base templaate from TMX
-        #self.base_tile_data = self._load_tmx_data(tmx_file)
+        # load base templaate from TMX
+        # self.base_tile_data = self._load_tmx_data(tmx_file)
 
-        #generate dungeon
+        # generate dungeon
         self.__generate_dungeon()
 
     def __load_tileset(self, tileset_path: str) -> pygame.Surface:
@@ -720,6 +754,40 @@ class DungeonManager:
             fallback = pygame.Surface((128, 128))
             fallback.fill((100, 100, 100))
             return fallback
+
+    @property
+    def pillar_manager(self) -> PillarManager:
+        """Get the pillar manager"""
+        return self.__pillar_manager
+
+    def check_pillar_collection(self, player_x: int, player_y: int, player_width: int = 32, player_height: int = 32) -> \
+    Optional[Pillar]:
+        """Check if player collects a pillar in current room"""
+        if not self.__current_room_pos:
+            return None
+
+        player_rect = pygame.Rect(player_x, player_y, player_width, player_height)
+        collected_pillar = self.__pillar_manager.check_pillar_collection(self.__current_room_pos, player_rect)
+
+        if collected_pillar:
+            print(f"Collected {collected_pillar.name} pillar!")
+            # Check if we can now unlock boss room
+            if self.__pillar_manager.can_access_boss_room():
+                self.__unlock_boss_room_doors()
+
+        return collected_pillar
+
+    def __unlock_boss_room_doors(self):
+        """Unlock all doors leading to boss room"""
+        for row in range(self.__grid_height):
+            for col in range(self.__grid_width):
+                room = self.__dungeon_grid[row][col]
+                if room:
+                    for door in room.doors.values():
+                        dest_room = self.get_room_at_position(door.dest_room)
+                        if dest_room and dest_room.is_boss_room():
+                            door.unlock()
+                            print("Boss room door unlocked!")
 
     def try_enter_walkthrough_door(self, player_x: int, player_y: int) -> bool:
         """Try to enter a walk-through door automatically"""
@@ -765,24 +833,134 @@ class DungeonManager:
         if current_room:
             current_room.update_door_interactions(player_x, player_y, player_width, player_height)
 
+    def __get_template_layout(self) -> List[Tuple[int, int]]:
+        """Get room positions based on selected template"""
+        center = (self.__grid_height // 2, self.__grid_width // 2)
+
+        if self.__template == DungeonTemplate.CROSS:
+            # Original cross pattern
+            return [
+                center,  # Center room
+                (center[0], center[1] - 1),  # Left
+                (center[0], center[1] + 1),  # Right
+                (center[0] - 1, center[1]),  # Up
+                (center[0] + 1, center[1]),  # Down
+            ]
+
+        elif self.__template == DungeonTemplate.DEMO:
+            # Simple linear path for easy demonstration
+            return [
+                center,  # Start room
+                (center[0], center[1] + 1),  # Right to boss
+            ]
+
+        elif self.__template == DungeonTemplate.SQUARE:
+            # Square pattern with corners filled
+            positions = []
+            for row in range(self.__grid_height):
+                for col in range(self.__grid_width):
+                    positions.append((row, col))
+            return positions
+
+        elif self.__template == DungeonTemplate.FULL:
+            # All rooms filled
+            positions = []
+            for row in range(self.__grid_height):
+                for col in range(self.__grid_width):
+                    positions.append((row, col))
+            return positions
+
+        else:
+            # Default to square
+            return self.__get_template_layout()
 
     def __generate_dungeon(self):
         """Generate the dungeon layout with proper connectivity"""
+        # Get room positions from template
+        room_positions = self.__get_template_layout()
+
         # Start in center
         start_pos = (self.__grid_height // 2, self.__grid_width // 2)
         self.__current_room_pos = start_pos
 
-        # Create start room
-        start_room = Room(start_pos)
-        start_room.set_as_start_room()
-        self.__initialize_room(start_room)
-        self.__dungeon_grid[start_pos[0]][start_pos[1]] = start_room
+        # Create rooms based on template
+        for pos in room_positions:
+            if self.__is_valid_position(pos):
+                room = Room(pos)
 
-        # Generate connected rooms
-        self.__generate_connected_rooms()
+                # Set special rooms
+                if pos == start_pos:
+                    room.set_as_start_room()
+                elif self.__template == DungeonTemplate.DEMO and pos == (start_pos[0], start_pos[1] + 1):
+                    room.set_as_boss_room()
+                elif pos == (0, self.__grid_width - 1):  # Top-right corner for non-demo
+                    room.set_as_boss_room()
 
-        # Add doors only where connections exist
+                self.__initialize_room(room)
+                self.__dungeon_grid[pos[0]][pos[1]] = room
+
+        # Create doors between connected rooms
         self.__create_doors()
+
+        # Distribute pillars
+        self.__distribute_pillars()
+
+        # Lock boss room doors initially
+        self.__lock_boss_room_doors()
+
+    def __distribute_pillars(self):
+        """Distribute pillars throughout the dungeon"""
+        available_pillar_types = list(PillarType)
+        available_rooms = []
+        boss_room_pos = None
+
+        # Find available rooms (not start room)
+        for row in range(self.__grid_height):
+            for col in range(self.__grid_width):
+                room = self.__dungeon_grid[row][col]
+                if room:
+                    if room.is_boss_room():
+                        boss_room_pos = (row, col)
+                    elif not room.is_start_room():
+                        available_rooms.append((row, col))
+
+        # Shuffle pillar types
+        random.shuffle(available_pillar_types)
+
+        # Place Composition pillar in boss room
+        if boss_room_pos:
+            composition_pillar = Pillar(
+                PillarType.COMPOSITION,
+                self.__dungeon_grid[boss_room_pos[0]][boss_room_pos[1]].width // 2,
+                self.__dungeon_grid[boss_room_pos[0]][boss_room_pos[1]].floor_y - 64
+            )
+            self.__pillar_manager.add_pillar_to_room(boss_room_pos, composition_pillar)
+            available_pillar_types.remove(PillarType.COMPOSITION)
+
+        # Place other pillars in random rooms
+        random.shuffle(available_rooms)
+        for i, pillar_type in enumerate(available_pillar_types):
+            if i < len(available_rooms):
+                room_pos = available_rooms[i]
+                room = self.__dungeon_grid[room_pos[0]][room_pos[1]]
+
+                # Random position in room (avoiding edges)
+                pillar_x = random.randint(200, room.width - 200)
+                pillar_y = room.floor_y - 64
+
+                pillar = Pillar(pillar_type, pillar_x, pillar_y)
+                self.__pillar_manager.add_pillar_to_room(room_pos, pillar)
+
+    def __lock_boss_room_doors(self):
+        """Lock all doors leading to boss room"""
+        for row in range(self.__grid_height):
+            for col in range(self.__grid_width):
+                room = self.__dungeon_grid[row][col]
+                if room:
+                    for door in room.doors.values():
+                        dest_room = self.get_room_at_position(door.dest_room)
+                        if dest_room and dest_room.is_boss_room():
+                            door.lock("Need 4 OOP Pillars to enter Boss Room")
 
     def __generate_connected_rooms(self):
         """Generate a connected set of rooms"""
@@ -866,6 +1044,16 @@ class DungeonManager:
         if self.__current_room_pos:
             return self.__dungeon_grid[self.__current_room_pos[0]][self.__current_room_pos[1]]
         return None
+
+    def update_pillars(self, dt: float):
+        """Update pillars in current room"""
+        if self.__current_room_pos:
+            self.__pillar_manager.update_pillars_in_room(self.__current_room_pos, dt)
+
+    def draw_pillars(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
+        """Draw pillars in current room"""
+        if self.__current_room_pos:
+            self.__pillar_manager.draw_pillars_in_room(self.__current_room_pos, surface, camera_offset)
 
     def try_enter_door(self, player_x: int, player_y: int) -> bool:
         """

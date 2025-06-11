@@ -13,10 +13,12 @@ from src.model.Platform import PlatformManager, Platform
 from src.utils.RoomTransitionManager import RoomTransitionManager, DoorInteractionManager
 from src.utils.SpriteSheetHandler import SpriteManager
 from src.model.DungeonEntity import Direction, AnimationState
-from src.model.RoomDungeonSystem import DungeonManager, Room, Direction
+from src.model.RoomDungeonSystem import DungeonManager, Room, Direction, DungeonTemplate
 from src.utils.RoomTransitionManager import RoomTransitionManager, DoorInteractionManager, TransitionType
 import random
 from src.view.Menu import GameResultMenu
+from src.view.DungeonMinimap import DungeonMinimap, MinimapIntegration, RoomDisplayType
+from src.utils.DungeonConfig import DungeonConfig
 
 
 class HeroType(Enum):
@@ -98,6 +100,15 @@ class Game:
         self._selection_font = pygame.font.Font(None, 48)
         self._description_font = pygame.font.Font(None, 24)
         self._background_color = (50, 50, 80)
+
+        #dungeon temp late selection
+        self._dungeon_template = DungeonTemplate.SQUARE
+
+        # Initialize minimap system positioned in bottom-left corner
+        minimap_x = 10  # 10 pixels from left edge
+        minimap_y = self.height - 120  # 120 pixels from bottom (adjust as needed)
+        self.__minimap = DungeonMinimap((3, 3), position=(minimap_x, minimap_y))
+        self.__minimap_integration = MinimapIntegration(self.__minimap, self._ui_font)
 
         # Load assets
         # self._tileset = self._load_tileset()
@@ -183,14 +194,23 @@ class Game:
         if not self._selected_hero_type:
             raise ValueError("Hero must be selected before initializing dungeon")
 
-        self._dungeon_manager = DungeonManager((3, 3), "assets/levels/flat-tileset.csv",
-                                               "assets/environment/old-dark-castle-interior-tileset.png")
+        # Allow template selection (could be from menu or config)
+        # For demonstration, use DEMO template
+        # self._dungeon_template = DungeonTemplate.DEMO  # Uncomment for easy demo
+
+        self._dungeon_manager = DungeonManager(
+            (3, 3),
+            "assets/levels/flat-tileset.csv",
+            "assets/environment/old-dark-castle-interior-tileset.png",
+            self._dungeon_template  # Pass template
+        )
 
         self._current_room = self._dungeon_manager.get_current_room()
 
         if not self._current_room:
             raise RuntimeError("Failed to initialize dungeon room")
 
+        self.__minimap_integration.sync_with_dungeon_manager(self._dungeon_manager)
         self._setup_door_requirements()
 
     def _setup_door_requirements(self):
@@ -213,6 +233,8 @@ class Game:
         self.foreground_sprites.empty()
         self.damageable_sprites.empty()
         self.solid_sprites.empty()
+        if hasattr(self, '_Game__minimap'):
+            self.__minimap.clear_all_rooms()
 
     def handle_event(self, event):
         """Handle events with validation"""
@@ -275,6 +297,8 @@ class Game:
             self._space_pressed = True
         elif key == pygame.K_F11:
             self._toggle_fullscreen()
+        elif key == pygame.K_m:
+            self.__minimap_integration.toggle_visibility()
 
     def _handle_paused_input(self, key):
         """Handle input while game is paused"""
@@ -284,6 +308,8 @@ class Game:
             self.running = False
         elif key == pygame.K_F11:
             self._toggle_fullscreen()
+        elif key == pygame.K_m:
+            self.__minimap_integration.toggle_visibility()
 
     def _handle_end_state_input(self, key):
         """Handle input in end game states"""
@@ -293,6 +319,8 @@ class Game:
             self.running = False
         elif key == pygame.K_F11:
             self._toggle_fullscreen()
+        elif key == pygame.K_m:
+            self.__minimap_integration.toggle_visibility()
 
     def _reset_game(self):
         """Reset the game to initial state"""
@@ -325,11 +353,17 @@ class Game:
                 # check for door traversal
                 self._check_door_traversal(prev_x, prev_y)
 
+                # Check for pillar collection
+                self._check_pillar_collection()
+
             self.all_sprites.update(dt)
             self._handle_collisions()
             self._update_game_objects(dt)
             self._update_camera()
             self._check_game_state()
+
+            # Update pillars
+            self._dungeon_manager.update_pillars(dt)
 
     def _check_door_traversal(self, prev_x: int, prev_y: int):
         """Check if hero has moved into a door and handle traversal"""
@@ -383,6 +417,9 @@ class Game:
 
         # Clear any room-specific enemies/items if needed
         self._handle_room_change()
+
+        #update minimap
+        self.__minimap_integration.update_player_position(self._dungeon_manager)
 
         # Clear pending door
         self._pending_door = None
@@ -650,6 +687,9 @@ class Game:
         """Draw game world"""
         if self._current_room:
             self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
+
+        # Draw pillars
+        self._dungeon_manager.draw_pillars(self.screen, (self._camera_x, self._camera_y))
 
         self._draw_enemies()
         self._draw_heroes()
@@ -1018,8 +1058,7 @@ class Game:
         # Health
         if self._active_hero.is_alive:
             health_percent = self._active_hero.health / self._active_hero.max_health
-            health_color = (0, 200, 0) if health_percent > 0.5 else (200, 200, 0) if health_percent > 0.25 else (200, 0,
-                                                                                                                 0)
+            health_color = (0, 200, 0) if health_percent > 0.5 else (200, 200, 0) if health_percent > 0.25 else (200, 0, 0)
             pygame.draw.rect(self.screen, health_color, (bar_x, bar_y, bar_width * health_percent, bar_height))
 
         # Border
@@ -1039,6 +1078,11 @@ class Game:
             cd_text = self._ui_font.render("Special (Q): Ready!", True, (0, 255, 0))
             self.screen.blit(cd_text, (10, 70))
 
+        # Draw pillar collection UI (bottom center)
+        pillar_ui_x = self.width // 2 - 125  # Center the 250px wide UI
+        pillar_ui_y = self.height - 40
+        self._dungeon_manager.pillar_manager.draw_collection_ui(self.screen, pillar_ui_x, pillar_ui_y)
+
         # Controls reminder (bottom right)
         controls = [
             "A/D - Move",
@@ -1054,11 +1098,7 @@ class Game:
             self.screen.blit(text, text_rect)
             y_offset += 20
 
-        # Display room position
-        if self._dungeon_manager:
-            room_pos = self._dungeon_manager.get_current_room_position()
-            pos_text = self._ui_font.render(f"Room: ({room_pos[0]}, {room_pos[1]})", True, (255, 255, 255))
-            self.screen.blit(pos_text, (10, self.height - 30))
+        self.__minimap_integration.draw_with_ui(self.screen)
 
     def _draw_pause_overlay(self):
         """Draw pause screen overlay"""
@@ -1114,12 +1154,16 @@ class Game:
         if not self._current_room or not self._active_hero:
             return
 
-        # This is pseudocode
-        # if self._current_room.try_collect_pillar(self._active_hero.x, self._active_hero.y):
-        #     self._door_manager.add_to_inventory("pillar")
-        #     print("Pillar collected!")
+        collected_pillar = self._dungeon_manager.check_pillar_collection(
+            self._active_hero.x,
+            self._active_hero.y,
+            self._active_hero.width,
+            self._active_hero.height
+        )
 
-    # ADDITIONAL HELPER METHODS
+        if collected_pillar:
+            # Could trigger visual/audio feedback here
+            print(f"Collected {collected_pillar.name}!")
 
     def unlock_boss_doors(self):
         """Unlock boss room doors when requirements are met"""
@@ -1170,6 +1214,16 @@ class Game:
         
         # Update transition manager with new dimensions
         self._transition_manager = RoomTransitionManager(self.width, self.height)
+
+        #update minimap position for new screen size
+        if hasattr(self, '_Game__minimap'):
+            minimap_x = 10
+            minimap_y = self.height - 120  # Adjust this value as needed
+            self.__minimap.set_position((minimap_x, minimap_y))
         
         # Force a display update
         pygame.display.flip()
+
+    def set_dungeon_template(self, template: DungeonTemplate):
+        """Set the dungeon template for next game"""
+        self._dungeon_template = template
