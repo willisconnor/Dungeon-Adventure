@@ -698,7 +698,7 @@ class Room:
         #if self.__background_surface:
             #surface.blit(self.__background_surface, (-camera_offset[0], -camera_offset[1]))
 
-        # Draw floor
+         #Draw floor
         if self.__floor_surface:
             floor_draw_y = self.__floor_y - camera_offset[1]
             surface.blit(self.__floor_surface, (-camera_offset[0], floor_draw_y))

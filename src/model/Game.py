@@ -20,6 +20,7 @@ from src.view.Menu import GameResultMenu
 from src.view.DungeonMinimap import DungeonMinimap, MinimapIntegration, RoomDisplayType
 from src.utils.DungeonConfig import DungeonConfig
 from src.view.BackgroundManager import BackgroundManager
+from src.view.TileRenderer import TileRenderer
 
 
 class HeroType(Enum):
@@ -116,6 +117,13 @@ class Game:
 
         # Load assets
         # self._tileset = self._load_tileset()
+        self._tile_renderer = TileRenderer(
+            csv_path = "assets/levels/flat-tileset.csv",
+            tileset_path = "assets/environment/old-dark-castle-interior-tileset.png",
+            tile_width= 16,
+            tile_height= 16
+        )
+
 
     def _load_tileset(self):
         """Load the game tileset"""
@@ -693,6 +701,7 @@ class Game:
 
             room_size = (self._current_room.width, self._current_room.height)
             self._background_manager.draw(self.screen, (self._camera_x, self._camera_y), room_size)
+            #self._tile_renderer.draw(self.screen, (self._camera_x, self._camera_y))
             self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
 
         # Draw pillars
