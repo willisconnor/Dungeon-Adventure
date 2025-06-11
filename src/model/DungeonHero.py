@@ -4,6 +4,7 @@ from src.model.DungeonCharacter import DungeonCharacter
 from src.model.DungeonEntity import AnimationState, Direction
 import pygame
 import sqlite3
+import random
 '''Connor Willis corndog
 '''
 class Hero(DungeonCharacter, pygame.sprite.Sprite):
@@ -58,7 +59,11 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         # Hero-specific stats
         self.damage = stats["damage"]
         self.attack_range = stats["attack_range"]
+        self.attack_speed = stats["attack_speed"]
         self.special_cooldown = stats["special_cooldown"]
+        self.defense = stats["defense"]
+        self.critical_chance = stats["critical_chance"]
+        self.critical_damage = stats["critical_damage"]
 
         # Hero state flags
         self.is_moving = False
@@ -78,7 +83,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.attack_complete = True
         self.attack_window = 0
         self.hit_targets = set()
-        self.attack_duration = 0.5  # How long each attack lasts (0.5 seconds)
+        self.attack_duration = 1.0 / stats["attack_speed"]  # Duration based on attack speed (hits per second)
 
         # Movement/physics state
         self.is_jumping = False
@@ -97,7 +102,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         # Load all sprite paths
         c.execute('''
             SELECT animation_state, sprite_path
-            FROM hero_sprites
+            FROM hero_animations
             WHERE hero_type = ?
         ''', (self.hero_type,))
         sprite_path_rows = c.fetchall()
@@ -105,7 +110,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
 
         # Convert to dict: {AnimationState: path}
         path_map = {
-            AnimationState(int(row[0])): row[1] for row in sprite_path_rows
+            AnimationState[row[0]]: row[1] for row in sprite_path_rows
         }
 
         frames = {}
@@ -167,12 +172,11 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         c = conn.cursor()
 
         c.execute('''
-            SELECT max_health, speed, damage, attack_range, special_cooldown
+            SELECT max_health, speed, damage, attack_range, attack_speed, 
+                   special_cooldown, defense, critical_chance, critical_damage
             FROM hero_stats
             WHERE hero_type = ?''', (self.hero_type,))
 
-        #need to make the db for this to work lol
-        #also, can change this based on what stats we want
         result = c.fetchone()
         conn.close()
 
@@ -182,15 +186,23 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
                 "speed": result[1],
                 "damage": result[2],
                 "attack_range": result[3],
-                "special_cooldown": result[4]
+                "attack_speed": result[4],
+                "special_cooldown": result[5],
+                "defense": result[6],
+                "critical_chance": result[7],
+                "critical_damage": result[8]
             }
-        else: #default stats if not found in DB (should not be used
+        else: #default stats if not found in DB (should not be used)
             return{
                 "max_health": 100,
                 "speed": 7,
                 "damage": 5,
                 "attack_range": 80,
-                "special_cooldown": 10
+                "attack_speed": 1.0,
+                "special_cooldown": 10,
+                "defense": 5,
+                "critical_chance": 0.05,
+                "critical_damage": 1.5
             }
 
     def _load_frame_counts(self):
@@ -209,7 +221,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         #convert results to dictionary
         frame_counts = {}
         for animation_state, frame_count in results:
-            frame_counts[AnimationState(animation_state)] = frame_count
+            frame_counts[AnimationState[animation_state]] = frame_count
 
         #default values if databse doesnt have all states
         #arbitrarily decided, might cause skipping in anim states
@@ -429,8 +441,23 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         return hit_targets
 
     def calculate_damage(self, target):
-        """Calculate damage to  be dealt to target, can be override by subclasses"""
-        return self.damage
+        """Calculate damage to be dealt to target, including critical hits and defense"""
+        # Base damage
+        base_damage = self.damage
+        
+        # Check for critical hit
+        if random.random() < self.critical_chance:
+            # Critical hit! Apply critical damage multiplier
+            base_damage *= self.critical_damage
+            print(f"{self.name} landed a critical hit! Damage: {base_damage}")
+        
+        # Apply target's defense (reduce damage)
+        if hasattr(target, 'defense'):
+            final_damage = max(1, base_damage - target.defense)  # Minimum 1 damage
+        else:
+            final_damage = base_damage
+            
+        return int(final_damage)
 
     def activate_special_ability(self):
         """Activate heros special ability, to be implemented by child classes"""
@@ -445,7 +472,9 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         if not self.is_alive or self.is_invulnerable or self.is_defending:
             return False
 
-        self.health -= damage
+        # Apply defense to reduce incoming damage
+        actual_damage = max(1, damage - self.defense)  # Minimum 1 damage
+        self.health -= actual_damage
 
         if self.health <= 0:
             self.health = 0
@@ -466,7 +495,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
 
         c.execute('''
             SELECT sprite_path
-            FROM hero_sprites
+            FROM hero_animations
             WHERE hero_type = ? AND animation_state = ?''', (self.hero_type, animation_state))
 
         result = c.fetchone()
