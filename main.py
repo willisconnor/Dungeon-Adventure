@@ -50,6 +50,7 @@ def main():
     print("- E: Defend")
     print("- 1/2/3: Switch heroes")
     print("- ESC: Pause")
+    print("- F11: Toggle fullscreen (or use maximize button)")
 
     #create and run the game
     #game = Game(screen, SCREEN_WIDTH, SCREEN_HEIGHT)

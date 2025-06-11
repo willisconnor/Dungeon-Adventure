@@ -43,6 +43,13 @@ class Game:
         self.state = GameState.PLAYING  # Changed from HERO_SELECT to PLAYING
         self.running = False
 
+        # Fullscreen state
+        self.is_fullscreen = False
+        self.windowed_width = width
+        self.windowed_height = height
+        self.fullscreen_width = pygame.display.Info().current_w
+        self.fullscreen_height = pygame.display.Info().current_h
+
         # Sprite groups needed for collision detection and rendering
         self.all_sprites = pygame.sprite.Group()
         self.hero_sprites = pygame.sprite.Group()
@@ -226,6 +233,24 @@ class Game:
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_SPACE:
                 self._space_pressed = False
+        elif hasattr(pygame, 'WINDOWMAXIMIZED') and event.type == pygame.WINDOWMAXIMIZED:
+            # Handle window maximize button click
+            if not self.is_fullscreen:
+                self._toggle_fullscreen()
+        elif hasattr(pygame, 'WINDOWRESTORED') and event.type == pygame.WINDOWRESTORED:
+            # Handle window restore button click
+            if self.is_fullscreen:
+                self._toggle_fullscreen()
+        elif hasattr(pygame, 'WINDOWRESIZED') and event.type == pygame.WINDOWRESIZED:
+            # Handle manual window resize
+            if not self.is_fullscreen:
+                # Update windowed dimensions to new size
+                self.width = event.x
+                self.height = event.y
+                self.windowed_width = self.width
+                self.windowed_height = self.height
+                # Update transition manager with new dimensions
+                self._transition_manager = RoomTransitionManager(self.width, self.height)
 
     def _handle_hero_select_input(self, key):
         """Handle input during hero selection"""
@@ -237,6 +262,8 @@ class Game:
             self.select_hero(HeroType.CLERIC)
         elif key == pygame.K_ESCAPE:
             self.running = False
+        elif key == pygame.K_F11:
+            self._toggle_fullscreen()
 
     def _handle_playing_input(self, key):
         """Handle input during gameplay"""
@@ -244,6 +271,8 @@ class Game:
             self.set_game_state(GameState.PAUSED)
         elif key == pygame.K_SPACE:
             self._space_pressed = True
+        elif key == pygame.K_F11:
+            self._toggle_fullscreen()
 
     def _handle_paused_input(self, key):
         """Handle input while game is paused"""
@@ -251,6 +280,8 @@ class Game:
             self.set_game_state(GameState.PLAYING)
         elif key == pygame.K_q:
             self.running = False
+        elif key == pygame.K_F11:
+            self._toggle_fullscreen()
 
     def _handle_end_state_input(self, key):
         """Handle input in end game states"""
@@ -258,6 +289,8 @@ class Game:
             self._reset_game()
         elif key == pygame.K_ESCAPE:
             self.running = False
+        elif key == pygame.K_F11:
+            self._toggle_fullscreen()
 
     def _reset_game(self):
         """Reset the game to initial state"""
@@ -1078,3 +1111,26 @@ class Game:
         # Floor boundary
         if self._active_hero.y + self._active_hero.height > self._current_room.floor_y:
             self._active_hero.y = self._current_room.floor_y - self._active_hero.height
+
+    def _toggle_fullscreen(self):
+        """Toggle fullscreen mode"""
+        self.is_fullscreen = not self.is_fullscreen
+        
+        if self.is_fullscreen:
+            # Switch to fullscreen
+            self.windowed_width = self.width
+            self.windowed_height = self.height
+            self.width = self.fullscreen_width
+            self.height = self.fullscreen_height
+            self.screen = pygame.display.set_mode((self.fullscreen_width, self.fullscreen_height), pygame.FULLSCREEN)
+        else:
+            # Switch to windowed mode
+            self.width = self.windowed_width
+            self.height = self.windowed_height
+            self.screen = pygame.display.set_mode((self.windowed_width, self.windowed_height))
+        
+        # Update transition manager with new dimensions
+        self._transition_manager = RoomTransitionManager(self.width, self.height)
+        
+        # Force a display update
+        pygame.display.flip()

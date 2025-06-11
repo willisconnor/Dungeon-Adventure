@@ -68,6 +68,8 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         # Special ability state
         self.special_cooldown_remaining = 0
         self.using_special = False
+        self.special_duration = 1.0  # How long the special ability lasts (1 second)
+        self.special_duration_remaining = 0  # Timer for special ability duration
 
         # Attack state
         self.is_attacking = False
@@ -76,6 +78,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.attack_complete = True
         self.attack_window = 0
         self.hit_targets = set()
+        self.attack_duration = 0.5  # How long each attack lasts (0.5 seconds)
 
         # Movement/physics state
         self.is_jumping = False
@@ -108,25 +111,26 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         frames = {}
         frame_counts = self.get_frame_counts()
 
-        for state in self.frame_counts:
+        # Ensure all AnimationStates have at least one frame
+        for state in AnimationState:
             path = path_map.get(state)
+            count = frame_counts.get(state, 1)
             if not path or not os.path.exists(path):
-                # Create a simple colored rectangle instead of pink
-                surf = pygame.Surface((64, 64), pygame.SRCALPHA)
-
-                # Different colors for different hero types
-                if self.hero_type == "knight":
-                    surf.fill((100, 100, 200))  # Blue
-                elif self.hero_type == "archer":
-                    surf.fill((100, 200, 100))  # Green
-                elif self.hero_type == "cleric":
-                    surf.fill((200, 100, 100))  # Red
+                # Fallback: use idle frame or colored rectangle
+                if AnimationState.IDLE in frames:
+                    frames[state] = frames[AnimationState.IDLE]
                 else:
-                    surf.fill((150, 150, 150))  # Gray
-
-                frames[state] = [surf]
+                    surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+                    if self.hero_type == "knight":
+                        surf.fill((100, 100, 200))
+                    elif self.hero_type == "archer":
+                        surf.fill((100, 200, 100))
+                    elif self.hero_type == "cleric":
+                        surf.fill((200, 100, 100))
+                    else:
+                        surf.fill((150, 150, 150))
+                    frames[state] = [surf for _ in range(count)]
                 continue
-
             # Try to load and slice sprite sheet
             try:
                 sheet = pygame.image.load(path).convert_alpha()
@@ -142,18 +146,19 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
                 frames[state] = state_frames
             except (pygame.error, FileNotFoundError):
                 # Fallback if sprite loading fails
-                surf = pygame.Surface((64, 64), pygame.SRCALPHA)
-                hero_type = self.hero_type
-                if self.hero_type == "knight":
-                    surf.fill((100, 100, 200))
-                elif self.hero_type == "archer":
-                    surf.fill((100, 200, 100))
-                elif self.hero_type == "cleric":
-                    surf.fill((200, 100, 100))
+                if AnimationState.IDLE in frames:
+                    frames[state] = frames[AnimationState.IDLE]
                 else:
-                    surf.fill((150, 150, 150))
-                frames[state] = [surf]
-
+                    surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+                    if self.hero_type == "knight":
+                        surf.fill((100, 100, 200))
+                    elif self.hero_type == "archer":
+                        surf.fill((100, 200, 100))
+                    elif self.hero_type == "cleric":
+                        surf.fill((200, 100, 100))
+                    else:
+                        surf.fill((150, 150, 150))
+                    frames[state] = [surf for _ in range(count)]
         return frames
 
     def _load_hero_stats(self):
@@ -284,6 +289,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
                 self.is_attacking = True
                 self.attack_complete = False
                 self.attack_window = 0 #reset combo window on successful input
+                self.attack_timer = self.attack_duration  # Start the attack duration timer
                 #clear hit targets for new attack
                 self.hit_targets.clear()
         #reset input flag when spacebar is released
@@ -302,11 +308,20 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             if self.special_cooldown_remaining < 0:
                 self.special_cooldown_remaining = 0
 
+        #update special ability duration
+        if self.special_duration_remaining > 0:
+            self.special_duration_remaining -= dt
+            if self.special_duration_remaining <= 0:
+                self.using_special = False
+                self.special_duration_remaining = 0
+
         #update attack timer
         if self.attack_timer > 0:
-            self.special_cooldown_remaining -= dt
+            self.attack_timer -= dt
             if self.attack_timer <= 0:
                 self.is_attacking = False
+                self.attack_timer = 0
+                self.attack_complete = True
 
         #ground check
         if self.y >= self.ground_y:
@@ -421,6 +436,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         """Activate heros special ability, to be implemented by child classes"""
         self.using_special = True
         self.special_cooldown_remaining = self.special_cooldown
+        self.special_duration_remaining = self.special_duration  # Start the duration timer
 
     def take_damage(self, damage):
         """Take damage, return True if hit, False if not"""
@@ -489,15 +505,15 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         """Get frame counts dictionary"""
         return self.frame_counts
 
-    # Override parent methods to fix naming conflicts
-    def is_attacking(self):
+    # Getter methods for state checking
+    def get_is_attacking(self):
         """Check if character is currently attacking"""
-        return self.is_attacking  # The attribute, not the method
+        return self.is_attacking
 
-    def is_using_special(self):
+    def get_is_using_special(self):
         """Check if character is using special ability"""
         return self.using_special
 
-    def is_alive(self):
+    def get_is_alive(self):
         """Check if character is alive"""
-        return self.is_alive  # The attribute
+        return self.is_alive
