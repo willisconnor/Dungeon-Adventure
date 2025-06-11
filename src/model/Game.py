@@ -16,6 +16,8 @@ from src.model.DungeonEntity import Direction, AnimationState
 from src.model.RoomDungeonSystem import DungeonManager, Room, Direction
 from src.utils.RoomTransitionManager import RoomTransitionManager, DoorInteractionManager, TransitionType
 import random
+from src.view.Menu import GameResultMenu
+
 
 class HeroType(Enum):
     """Available hero types"""
@@ -559,8 +561,16 @@ class Game:
     def run(self):
         """main game loop"""
         self.running = True
+        result = "exit"  # Default return value
 
         while self.running:
+            # Check if we should return to main menu
+            if self.state == GameState.MENU:
+                print("Returning to main menu...")
+                self.running = False
+                result = "menu"
+                break
+
             # calc delta time
             dt = self._clock.tick(60) / 1000.0  # 60 fps, dt in seconds
 
@@ -568,8 +578,19 @@ class Game:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+                    result = "exit"
+                    break
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        if self.state == GameState.PLAYING:
+                            self.state = GameState.PAUSED
+                        elif self.state == GameState.PAUSED:
+                            self.state = GameState.PLAYING
+                    # Add more key handlers as needed
                 else:
                     self.handle_event(event)
+
+
 
             # update game state
             if self.state == GameState.PLAYING:
@@ -579,8 +600,27 @@ class Game:
             # draw it all
             self.draw()
 
+            # Check game state
+            if self.state == GameState.VICTORY:
+                self._draw_victory()
+                # After drawing victory screen, check if state changed to MENU
+                if self.state == GameState.MENU:
+                    print("Victory: Returning to main menu...")
+                    self.running = False
+                    result = "menu"
+                    break
+            elif self.state == GameState.GAME_OVER:
+                self._draw_game_over()
+                # After drawing game over screen, check if state changed to MENU
+                if self.state == GameState.MENU:
+                    print("Game Over: Returning to main menu...")
+                    self.running = False
+                    result = "menu"
+                    break
+
             # update display
             pygame.display.flip()
+        return result
 
     def draw(self):
         """Draw everything to the screen"""
@@ -1037,37 +1077,36 @@ class Game:
         resume_rect = resume_text.get_rect(center=(self.width // 2, self.height // 2 + 50))
         self.screen.blit(resume_text, resume_rect)
 
-    def _draw_game_over(self):
-        """Draw game over screen"""
-        self.screen.fill((20, 20, 20))
-
-        game_over_text = self._font.render("GAME OVER", True, (200, 0, 0))
-        game_over_rect = game_over_text.get_rect(center=(self.width // 2, self.height // 2))
-        self.screen.blit(game_over_text, game_over_rect)
-
-        retry_text = self._ui_font.render("Press SPACE to Try Again", True, (150, 150, 150))
-        retry_rect = retry_text.get_rect(center=(self.width // 2, self.height // 2 + 50))
-        self.screen.blit(retry_text, retry_rect)
-
-        quit_text = self._ui_font.render("Press ESC to Quit", True, (150, 150, 150))
-        quit_rect = quit_text.get_rect(center=(self.width // 2, self.height // 2 + 80))
-        self.screen.blit(quit_text, quit_rect)
-
     def _draw_victory(self):
         """Draw victory screen"""
-        self.screen.fill((20, 50, 20))
+        # Create a path to the assets directory
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        assets_path = os.path.join(project_root, "assets")
 
-        victory_text = self._font.render("VICTORY!", True, (0, 255, 0))
-        victory_rect = victory_text.get_rect(center=(self.width // 2, self.height // 2))
-        self.screen.blit(victory_text, victory_rect)
+        # Create and display the victory menu
+        victory_menu = GameResultMenu(self.screen, self.width, self.height, assets_path, True)
+        action = victory_menu.display()
 
-        continue_text = self._ui_font.render("Press SPACE for New Game", True, (150, 200, 150))
-        continue_rect = continue_text.get_rect(center=(self.width // 2, self.height // 2 + 50))
-        self.screen.blit(continue_text, continue_rect)
+        if action == "main_menu":
+            self.state = GameState.MENU
+            # Reset any game state as needed
+            self._reset_game()
 
-        quit_text = self._ui_font.render("Press ESC to Quit", True, (150, 200, 150))
-        quit_rect = quit_text.get_rect(center=(self.width // 2, self.height // 2 + 80))
-        self.screen.blit(quit_text, quit_rect)
+    def _draw_game_over(self):
+        """Draw game over screen"""
+        # Create a path to the assets directory
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        assets_path = os.path.join(project_root, "assets")
+
+        # Create and display the game over menu
+        game_over_menu = GameResultMenu(self.screen, self.width, self.height, assets_path, False)
+
+        action = game_over_menu.display()
+
+        if action == "main_menu":
+            self.state = GameState.MENU
+            # Reset any game state as needed
+            self._reset_game()
 
     # ADD PILLAR COLLECTION
     def _check_pillar_collection(self):

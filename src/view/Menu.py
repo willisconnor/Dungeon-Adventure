@@ -1,3 +1,4 @@
+
 import pygame
 import sys
 import os
@@ -868,4 +869,143 @@ class CharacterSelectionMenu:
             
             # Draw character ability
             ability_text = self.__stats_font.render(char_data["ability"], True, (255, 215, 0))  # Gold color
-            ability_rect = ability_text.get_rect(center=(x_position, y_position + 225))
+            ability_rect = ability_text.get_rect(center=(x_position, y_position + 200))
+
+
+class GameResultMenu:
+    """Menu for displaying game results (victory or defeat)"""
+
+    def __init__(self, screen: pygame.Surface, screen_width: int, screen_height: int, assets_path: str,
+                 is_victory: bool):
+        """
+        Initialize the game result menu
+
+        Args:
+            screen: Pygame surface to draw on
+            screen_width: Width of the screen
+            screen_height: Height of the screen
+            assets_path: Path to assets directory
+            is_victory: True for victory screen, False for game over screen
+        """
+        self.__screen = screen
+        self.__width = screen_width
+        self.__height = screen_height
+        self.__assets_path = assets_path
+        self.__is_victory = is_victory
+        self.__clock = pygame.time.Clock()
+        self.__fps = 60
+
+        # Load background image based on result
+        if is_victory:
+            self.__bg_image = self.__load_image("environment/victory_pic.png")
+            self.__result_text = "YOU WON!"
+            self.__text_color = (0, 255, 0)  # Green for victory
+            self.__bg_color = (20, 50, 20)  # Dark green fallback
+        else:
+            self.__bg_image = self.__load_image("environment/gameover_pic.jpg")
+            self.__result_text = "YOU LOST"
+            self.__text_color = (255, 0, 0)  # Red for defeat
+            self.__bg_color = (50, 20, 20)  # Dark red fallback
+
+        # Scale background to fit screen if loaded
+        if self.__bg_image:
+            self.__bg_image = pygame.transform.scale(self.__bg_image, (self.__width, self.__height))
+
+        # Initialize fonts
+        self.__title_font = pygame.font.SysFont(None, 100)
+        self.__button_font = pygame.font.SysFont(None, 50)
+
+        # Create buttons
+        self.__buttons = self.__create_buttons()
+
+    def __load_image(self, image_path: str) -> Optional[pygame.Surface]:
+        """
+        Safely load an image, returning None if it fails
+
+        Args:
+            image_path: Path to image file relative to assets directory
+
+        Returns:
+            Loaded image or None if loading failed
+        """
+        try:
+            full_path = os.path.join(self.__assets_path, image_path)
+            print(f"Attempting to load image from: {full_path}")
+            if os.path.exists(full_path):
+                return pygame.image.load(full_path).convert_alpha()
+            return None
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"Error loading image: {e}")
+            return None
+
+    def __create_buttons(self) -> List[Button]:
+        """
+        Create buttons for the result screen
+
+        Returns:
+            List of Button objects
+        """
+        buttons = []
+
+        # Main menu button
+        main_menu_button = Button(
+            image=None,
+            pos=(self.__width // 2, self.__height - 150),
+            text_input="MAIN MENU",
+            font=self.__button_font,
+            base_color="White",
+            hovering_color="#b68f40",
+            action="main_menu"
+        )
+        buttons.append(main_menu_button)
+
+        return buttons
+
+    def display(self) -> str:
+        """
+        Display the result screen
+
+        Returns:
+            Action string (currently only "main_menu")
+        """
+        while True:
+            mouse_pos = pygame.mouse.get_pos()
+
+            # Draw background
+            if self.__bg_image:
+                self.__screen.blit(self.__bg_image, (0, 0))
+            else:
+                self.__screen.fill(self.__bg_color)
+
+            # Draw semi-transparent overlay to make text more visible
+            overlay = pygame.Surface((self.__width, self.__height), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 128))  # Black with 50% transparency
+            self.__screen.blit(overlay, (0, 0))
+
+            # Draw title text
+            title_text = self.__title_font.render(self.__result_text, True, self.__text_color)
+            title_rect = title_text.get_rect(center=(self.__width // 2, self.__height // 3))
+            self.__screen.blit(title_text, title_rect)
+
+            # Update and draw buttons
+            for button in self.__buttons:
+                button.change_color(mouse_pos)
+                button.update(self.__screen)
+
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return "main_menu"
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    for button in self.__buttons:
+                        if button.check_for_input(mouse_pos):
+                            return button.action
+
+            pygame.display.update()
+            self.__clock.tick(self.__fps)
