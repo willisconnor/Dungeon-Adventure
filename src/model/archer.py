@@ -42,10 +42,13 @@ class Archer(Hero):
         hit_targets = []
 
         # Calculate arrow starting position
+        # Calculate arrow starting position at the center of the archer
         if self.get_direction() == Direction.RIGHT:
-            start_x = self.get_x() + 40
+            start_x = self.get_x() + self.width // 2  # Center horizontally
         else:
-            start_x = self.get_x() - 10
+            start_x = self.get_x() + self.width // 2  # Center horizontally
+
+        start_y = self.get_y() + self.height // 2  # Center vertically
 
         start_y = self.get_y() + 20  # Adjust to match animation
 
@@ -117,15 +120,15 @@ class Archer(Hero):
             # Calculate angle offset from center
             angle_offset = -spread_angle / 2 + i * angle_step
 
-            # Calculate starting position
+            # Calculate starting position at archer center
             if self.get_direction() == Direction.RIGHT:
-                start_x = self.get_x() + 40
+                start_x = self.get_x() + self.width // 2
                 angle = 0 + angle_offset  # 0 degrees = right
             else:
-                start_x = self.get_x() - 10
+                start_x = self.get_x() + self.width // 2
                 angle = 180 + angle_offset  # 180 degrees = left
 
-            start_y = self.get_y() + 10
+            start_y = self.get_y() + self.height // 2
 
             # Create arrow with angle
             arrow = Projectile(
