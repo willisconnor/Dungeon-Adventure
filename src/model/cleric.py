@@ -65,11 +65,11 @@ class Cleric(Hero):
         height = 80
 
         if self.get_direction() == Direction.RIGHT:
-            x = self.get_x() + 25
-            y = self.get_y() - height // 2
+            x = self.get_x() + self.width  # Start at the right edge of the character
+            y = self.get_y() + self.height - height  # Bottom of hitbox touches sprite feet
         else:
-            x = self.get_x() - 25 - width
-            y = self.get_y() - height // 2
+            x = self.get_x() - width  # Start at the left edge of the character
+            y = self.get_y() + self.height - height  # Bottom of hitbox touches sprite feet
 
         return pygame.Rect(x, y, width, height)
 
