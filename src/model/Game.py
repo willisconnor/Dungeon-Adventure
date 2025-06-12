@@ -815,16 +815,16 @@ class Game:
                     #pygame.draw.rect(self.screen, (255, 255, 0), highlight_rect, 3)
 
                 # Draw attack hitbox for debugging
-                if hero.is_attacking:
-                    attack_hitbox = hero.get_attack_hitbox()
-                    if attack_hitbox:
-                        debug_rect = pygame.Rect(
-                            attack_hitbox.x - self._camera_x,
-                            attack_hitbox.y - self._camera_y,
-                            attack_hitbox.width,
-                            attack_hitbox.height
-                        )
-                        pygame.draw.rect(self.screen, (255, 255, 0), debug_rect, 1)
+                # if hero.is_attacking:
+                #     attack_hitbox = hero.get_attack_hitbox()
+                #     if attack_hitbox:
+                #         debug_rect = pygame.Rect(
+                #             attack_hitbox.x - self._camera_x,
+                #             attack_hitbox.y - self._camera_y,
+                #             attack_hitbox.width,
+                #             attack_hitbox.height
+                #         )
+                #         pygame.draw.rect(self.screen, (255, 255, 0), debug_rect, 1)
 
     def _draw_projectiles(self):
         """Draw projectiles with camera offset"""
