@@ -32,13 +32,13 @@ class Cleric(Hero):
         if self.__projectile_manager is not None:
             from src.model.ProjectileManager import Projectile, ProjectileType
 
-            # Calculate fireball starting position
+            # Calculate fireball starting position at the center of the cleric
             if self.get_direction() == Direction.RIGHT:
-                start_x = self.get_x() + 50
+                start_x = self.get_x() + self.width // 2  # Center horizontally
             else:
-                start_x = self.get_x() - 20
+                start_x = self.get_x() + self.width // 2  # Center horizontally
 
-            start_y = self.get_y() - 10  # Raised by 20 pixels (was +10, now -10)
+            start_y = self.get_y() + self.height // 2  # Center vertically
 
             # Create and cast fireball
             fireball = Projectile(

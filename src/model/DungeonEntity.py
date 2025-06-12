@@ -98,15 +98,14 @@ class DungeonEntity(ABC, pygame.sprite.Sprite):
         #check if attackers hitbox overlaps with entity's hitbox
         return self.hitbox.colliderect(self.hitbox)
 
-
     def _update_hitbox(self):
         """update hitbox based on entity position"""
-        hitbox_width = 64
-        hitbox_height = 64
-        # Center the hitbox on the character
+        hitbox_width = 48  # Slightly smaller width
+        hitbox_height = 16  # Much smaller height - just feet level
+        # Position hitbox at the very bottom of the character (feet only)
         self.hitbox = pygame.Rect(
-            self.x + (self.width - hitbox_width) // 2,
-            self.y + (self.height - hitbox_height) // 2,
+            self.x + (self.width - hitbox_width) // 2,  # Center horizontally
+            self.y + self.height - hitbox_height,  # Very bottom (feet)
             hitbox_width,
             hitbox_height
         )

@@ -125,6 +125,7 @@ class Game:
         )
 
 
+
     def _load_tileset(self):
         """Load the game tileset"""
         tileset_path = os.path.join("assets", "environment", "old-dark-castle-interior-tileset.png")
@@ -205,7 +206,7 @@ class Game:
                 # Set the correct position
                 hero.x = start_x
                 hero.y = start_y
-                
+
                 # Update ground_y to match the room's floor (top of floor)
                 hero.ground_y = self._current_room.floor_y - hero.height
                 
@@ -399,25 +400,26 @@ class Game:
         if not self._current_room or not self._active_hero:
             return
 
+        # Use the hero's actual position with a smaller collision area (just feet level)
+        hero_x = self._active_hero.x + self._active_hero.width // 4  # Offset from left edge
+        hero_y = self._active_hero.y + self._active_hero.height - 16  # Bottom 16 pixels (feet level)
+        hero_width = self._active_hero.width // 2  # Half width
+        hero_height = 16  # Only 16 pixels tall (feet level)
+
         # Update door interactions first (this handles the UI prompts)
         self._dungeon_manager.update_current_room_interactions(
-            self._active_hero.x, self._active_hero.y,
-            self._active_hero.width, self._active_hero.height
+            hero_x, hero_y, hero_width, hero_height
         )
 
         # Check for walk-through doors (LEFT/RIGHT) - automatic entry
-        if self._dungeon_manager.try_enter_walkthrough_door(
-                self._active_hero.x, self._active_hero.y
-        ):
+        if self._dungeon_manager.try_enter_walkthrough_door(hero_x, hero_y):
             self._start_room_transition(None)
             return
 
         # Check for interactive doors (UP/DOWN) with E key press
         keys = pygame.key.get_pressed()
         if keys[pygame.K_e]:  # Press E to interact
-            if self._dungeon_manager.try_enter_interactive_door(
-                    self._active_hero.x, self._active_hero.y, True
-            ):
+            if self._dungeon_manager.try_enter_interactive_door(hero_x, hero_y, True):
                 self._start_room_transition(None)
 
     def _start_room_transition(self, door):
@@ -479,6 +481,7 @@ class Game:
         self._active_hero.x = spawn_x
         self._active_hero.y = spawn_y
         
+
         # Update ground_y to match the new room's floor (top of floor)
         self._active_hero.ground_y = self._current_room.floor_y - self._active_hero.height
 
@@ -794,6 +797,13 @@ class Game:
         """Draw heroes with camera offset"""
         for hero in self._heroes.values():
             if hero.get_is_alive():
+                # DEBUG: Print hero positioning info
+                print(f"Drawing hero at: ({hero.get_x()}, {hero.get_y()})")
+                print(f"Room floor_y: {self._current_room.floor_y if self._current_room else 'No room'}")
+                print(f"Hero ground_y: {getattr(hero, 'ground_y', 'No ground_y')}")
+                print(
+                    f"Hero should be at floor: {self._current_room.floor_y - hero.height if self._current_room else 'No room'}")
+                print("---")
                 # Calculate screen position
                 screen_x = hero.get_x() - self._camera_x
                 screen_y = hero.get_y() - self._camera_y
@@ -1248,7 +1258,7 @@ class Game:
         if self._active_hero.x + self._active_hero.width > self._current_room.width:
             self._active_hero.x = self._current_room.width - self._active_hero.width
 
-        # Floor boundary
+        # Floor boundary - keep hero on the ground
         if self._active_hero.y + self._active_hero.height > self._current_room.floor_y:
             self._active_hero.y = self._current_room.floor_y - self._active_hero.height
 

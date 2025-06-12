@@ -804,7 +804,8 @@ class DungeonManager:
         if not current_room:
             return False
 
-        door = current_room.get_walkthrough_door_at_position(player_x, player_y)
+        # Use a reasonable hitbox size for door collision (not the tiny hitbox)
+        door = current_room.get_walkthrough_door_at_position(player_x, player_y, 64, 64)
         if door and not door.is_locked:
             return self.__execute_room_transition(door)
         return False
@@ -815,7 +816,8 @@ class DungeonManager:
         if not current_room:
             return False
 
-        door = current_room.get_interactive_door_at_position(player_x, player_y)
+        # Use a reasonable hitbox size for door collision (not the tiny hitbox)
+        door = current_room.get_interactive_door_at_position(player_x, player_y, 64, 64)
         if door and not door.is_locked and interaction_key_pressed:
             return self.__execute_room_transition(door)
         return False
