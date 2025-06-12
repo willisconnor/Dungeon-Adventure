@@ -372,6 +372,9 @@ class Game:
                 # Check for SPACE key press for basic attack
                 if keys[pygame.K_SPACE] and self._active_hero.attack_cooldown_remaining <= 0:
                     self._active_hero.activate_attack()
+                    print(f"SPACE pressed! Hero type: {self._active_hero.get_hero_type()}")
+                    print(f"Attack cooldown remaining: {self._active_hero.attack_cooldown_remaining}")
+                    print(f"Is already attacking: {self._active_hero.is_attacking}")
                 
                 # Check for Q key press for special ability
                 if keys[pygame.K_q] and self._active_hero.special_cooldown_remaining <= 0:
@@ -733,14 +736,14 @@ class Game:
     def _draw_game_world(self):
         """Draw game world"""
         if self._current_room:
-
             room_size = (self._current_room.width, self._current_room.height)
             self._background_manager.draw(self.screen, (self._camera_x, self._camera_y), room_size)
-            #self._tile_renderer.draw(self.screen, (self._camera_x, self._camera_y))
+            # self._tile_renderer.draw(self.screen, (self._camera_x, self._camera_y))
             self._current_room.draw(self.screen, (self._camera_x, self._camera_y))
 
-        # Draw pillars
-        self._dungeon_manager.draw_pillars(self.screen, (self._camera_x, self._camera_y))
+        # Only draw pillars when not transitioning between rooms
+        if not self._transition_manager.is_transitioning:
+            self._dungeon_manager.draw_pillars(self.screen, (self._camera_x, self._camera_y))
 
         self._draw_enemies()
         self._draw_heroes()
@@ -812,6 +815,7 @@ class Game:
                 current_sprite = hero.get_current_sprite()
                 if current_sprite:
                     sprite_rect = current_sprite.get_rect()
+
                     # Offset sprite so its bottom aligns with the floor (hitbox stays the same)
                     offset_x = (hero.width - sprite_rect.width) // 2
                     offset_y = hero.height - sprite_rect.height

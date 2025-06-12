@@ -132,14 +132,14 @@ def insert_hero_animations(conn):
             # Knight animations
             ('knight', 'IDLE', f'{base_path}/knight/Knight_1/Knight_Idle.png', 4, 0.15, 64, 64),
             ('knight', 'WALKING', f'{base_path}/knight/Knight_1/Knight_Walk.png', 6, 0.12, 64, 64),
-            ('knight', 'ATTACKING_1', f'{base_path}/knight/Knight_1/Knight_Attack.png', 5, 0.1, 64, 64),
+            ('knight', 'ATTACKING_1', f'{base_path}/knight/Knight_1/Knight_Attack1.png', 5, 0.1, 64, 64),
             ('knight', 'ATTACKING_2', f'{base_path}/knight/Knight_1/Knight_Attack2.png', 4, 0.1, 64, 64),
             ('knight', 'ATTACKING_3', f'{base_path}/knight/Knight_1/Knight_Attack3.png', 4, 0.1, 64, 64),
             ('knight', 'SPECIAL_SKILL', f'{base_path}/knight/Knight_1/Knight_Special.png', 6, 0.08, 64, 64),
             ('knight', 'DEFENDING', f'{base_path}/knight/Knight_1/Knight_Defend.png', 3, 0.2, 64, 64),
             ('knight', 'HURT', f'{base_path}/knight/Knight_1/Knight_Hurt.png', 2, 0.3, 64, 64),
-            
-            # Archer animations
+
+            # Archer animations - UPDATE THESE LINES
             ('archer', 'IDLE', f'{base_path}/archer/Samurai_Archer/Archer_Idle.png', 4, 0.15, 64, 64),
             ('archer', 'WALKING', f'{base_path}/archer/Samurai_Archer/Archer_Walk.png', 6, 0.12, 64, 64),
             ('archer', 'ATTACKING_1', f'{base_path}/archer/Samurai_Archer/Archer_Attack.png', 5, 0.1, 64, 64),
