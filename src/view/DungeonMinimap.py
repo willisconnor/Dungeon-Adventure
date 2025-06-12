@@ -159,7 +159,8 @@ class RoomInfo:
 class CoordinateTransform:
     """Handles coordinate transformation between dungeon grid and minimap display"""
 
-    def __init__(self, grid_height: int):
+    def __init__(self, grid_width: int, grid_height: int):
+        self.__grid_width = self.__validate_dimension(grid_width, "grid_width")
         self.__grid_height = self.__validate_dimension(grid_height, "grid_height")
 
     @staticmethod
@@ -173,10 +174,10 @@ class CoordinateTransform:
 
     def dungeon_to_minimap(self, dungeon_pos: Tuple[int, int]) -> GridCoordinate:
         """
-        Convert dungeon coordinates to minimap coordinates
+        Convert dungeon coordinates to minimap coordinates with correct orientation
 
-        Dungeon coordinate system: (row, col) where row=0 is north, col=0 is west
-        Minimap display: row=0 is top, col=0 is left
+        Dungeon coordinate system: (row, col) where movement affects row/col
+        Minimap display: row=0 is top, col=0 is left, matching game directions
 
         Args:
             dungeon_pos: (row, col) position in dungeon grid
@@ -186,10 +187,11 @@ class CoordinateTransform:
         """
         dungeon_row, dungeon_col = dungeon_pos
 
-        # Direct mapping: dungeon row/col maps to minimap row/col
-        # This ensures: north->up, east->right, south->down, west->left
+        # Swap row and col to fix the orientation:
+        # - dungeon row (what you think is north/south) maps to minimap col (left/right)
+        # - dungeon col (what you think is east/west) maps to minimap row (up/down)
         minimap_row = dungeon_col
-        minimap_col = self.__grid_height - dungeon_row - 1
+        minimap_col = dungeon_row
 
         return GridCoordinate(minimap_row, minimap_col)
 
@@ -203,8 +205,8 @@ class CoordinateTransform:
         Returns:
             (row, col) position in dungeon grid
         """
-        # Reverse of dungeon_to_minimap transformation
-        dungeon_row = self.__grid_height - minimap_coord.col - 1
+        # Reverse the row/col swap
+        dungeon_row = minimap_coord.col
         dungeon_col = minimap_coord.row
         return (dungeon_row, dungeon_col)
 
@@ -279,7 +281,7 @@ class MinimapGeometry:
         self.__grid_height = self.__validate_dimension(grid_height, "grid_height")
         self.__dimensions = dimensions
         self.__position = (0, 0)
-        self.__coordinate_transform = CoordinateTransform(grid_height)
+        self.__coordinate_transform = CoordinateTransform(grid_width, grid_height)
 
         # Calculate dimensions (standard orientation: north=up, east=right)
         self.__width = self.__grid_width * (dimensions.room_size + dimensions.padding) - dimensions.padding + 2 * dimensions.border_size
@@ -415,7 +417,7 @@ class DungeonMinimap:
         self.__colors = RoomColors()
         self.__geometry = MinimapGeometry(grid_width, grid_height, self.__dimensions)
         self.__renderer = MinimapRenderer(self.__dimensions, self.__colors)
-        self.__coordinate_transform = CoordinateTransform(grid_height)
+        self.__coordinate_transform = CoordinateTransform(grid_width, grid_height)
 
         # Set initial position
         self.__geometry.set_position(position)
