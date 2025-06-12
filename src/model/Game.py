@@ -942,7 +942,8 @@ class Game:
         controls_text = [
             "Controls:",
             "A/D - Move Left/Right",
-            "Q - Attack"
+            "Q - Special",
+            "Space - Attack"
 
         ]
 
@@ -1129,8 +1130,8 @@ class Game:
         # Controls reminder (bottom right)
         controls = [
             "A/D - Move",
-            "SPACE - Attack",
-            "Q - Special"
+            "Q - Special",
+            "E - Defend"
         ]
 
         y_offset = self.height - 100

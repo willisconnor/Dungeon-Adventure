@@ -1,4 +1,4 @@
-####Connor Willis, Jayda Minks, Mohammad Farrah ####
+####Connor Willis, Jayda Minks ####
 #entry point, single room testing for now
 import pygame
 import sys
