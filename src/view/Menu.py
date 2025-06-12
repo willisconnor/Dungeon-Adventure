@@ -754,8 +754,7 @@ class CharacterSelectionMenu:
                 stats = [
                     f"HP: {max_health}",
                     f"Attack: {damage}",
-                    f"Speed: {speed}",
-                    f"Range: {attack_range}"
+                    f"Speed: {speed}"
                 ]
                 
                 # Define character-specific abilities and descriptions
