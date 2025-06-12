@@ -1162,7 +1162,7 @@ class Game:
         self.screen.blit(resume_text, resume_rect)
 
     def _draw_victory(self):
-        """Draw victory screen"""
+        from src.view.Menu import GameResultMenu
         # Create a path to the assets directory
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         assets_path = os.path.join(project_root, "assets")
@@ -1177,7 +1177,7 @@ class Game:
             self._reset_game()
 
     def _draw_game_over(self):
-        """Draw game over screen"""
+        from src.view.Menu import GameResultMenu
         # Create a path to the assets directory
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         assets_path = os.path.join(project_root, "assets")
