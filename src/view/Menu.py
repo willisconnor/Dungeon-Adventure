@@ -1,8 +1,9 @@
-
 import pygame
 import sys
 import os
-from typing import Optional, List, Tuple, Dict, Callable
+import time
+from typing import Optional, List, Dict, Tuple
+import sqlite3
 
 class Button:
     """Encapsulated button class for menu interfaces"""
@@ -389,9 +390,8 @@ class Menu:
         try:
             full_path = os.path.join(self.__assets_path, image_path)
             print(f"Attempting to load image from: {full_path}")
-            print(f"File exists: {os.path.exists(full_path)}")
             if os.path.exists(full_path):
-                return pygame.image.load(full_path)
+                return pygame.image.load(full_path).convert_alpha()
             return None
         except (pygame.error, FileNotFoundError) as e:
             print(f"Error loading image: {e}")
@@ -520,7 +520,7 @@ class Menu:
         Args:
             game_class: The Game class to instantiate when starting a new game
         """
-        from src.model.Game import HeroType, GameState
+        from src.model.Game import GameState, HeroType
         
         while True:  # Loop to keep returning to the main menu
             action = self.display()
@@ -629,30 +629,8 @@ class CharacterSelectionMenu:
         self.__stats_font = pygame.font.SysFont(None, 25)
         self.__button_font = pygame.font.SysFont(None, 40)
         
-        # Character data - we'll define stats and abilities for each character
-        self.__characters = {
-            "knight": {
-                "name": "Knight",
-                "stats": ["HP: 150", "Attack: 10", "Speed: 6"],
-                "ability": "Special: Shield Bash - Stuns enemies",
-                "description": "Tank with high defense",
-                "image_path": "sprites/heroes/knight/Knight_1/Knight_Stance.png"  # Updated path
-            },
-            "archer": {
-                "name": "Archer",
-                "stats": ["HP: 100", "Attack: 8", "Speed: 8"],
-                "ability": "Special: Powerful Shot - Ranged attack",
-                "description": "Ranged attacker",
-                "image_path": "sprites/heroes/archer/Samurai_Archer/Archer_Stance.png"  # Updated path
-            },
-            "cleric": {
-                "name": "Cleric",
-                "stats": ["HP: 120", "Attack: 7", "Speed: 7"],
-                "ability": "Special: Heal + Fireball - Support magic",
-                "description": "Support with magic",
-                "image_path": "sprites/heroes/cleric/Fire_Cleric/Cleric_Stance.png"  # Updated path
-            }
-        }
+        # Load character data from database
+        self.__characters = self.__load_character_data_from_db()
         
         # Load character images or create placeholders
         self.__character_images = {}
@@ -745,6 +723,111 @@ class CharacterSelectionMenu:
         except (pygame.error, FileNotFoundError) as e:
             print(f"Error loading image: {e}")
             return None
+    
+    def __load_character_data_from_db(self) -> Dict[str, Dict]:
+        """
+        Load character stats and data from the database
+        
+        Returns:
+            Dictionary containing character data with actual stats from database
+        """
+        try:
+            conn = sqlite3.connect('game_data.db')
+            c = conn.cursor()
+            
+            # Get hero stats from database
+            c.execute('''
+                SELECT hero_type, max_health, speed, damage, attack_range, 
+                       attack_speed, special_cooldown, defense, critical_chance, critical_damage
+                FROM hero_stats
+                WHERE hero_type IN ('knight', 'archer', 'cleric')
+            ''')
+            
+            hero_stats = c.fetchall()
+            conn.close()
+            
+            # Create character data dictionary
+            characters = {}
+            
+            for hero_type, max_health, speed, damage, attack_range, attack_speed, special_cooldown, defense, critical_chance, critical_damage in hero_stats:
+                # Format stats for display
+                stats = [
+                    f"HP: {max_health}",
+                    f"Attack: {damage}",
+                    f"Speed: {speed}"
+                ]
+                
+                # Define character-specific abilities and descriptions
+                abilities = {
+                    "knight": {
+                        "name": "Knight",
+                        "ability": "Special: Shield Bash - Stuns enemies",
+                        "description": "Tank with high defense and health",
+                        "image_path": "sprites/heroes/knight/Knight_1/Knight_Stance.png"
+                    },
+                    "archer": {
+                        "name": "Archer", 
+                        "ability": "Special: Rain of Arrows - Multiple projectiles",
+                        "description": "Ranged attacker with high critical chance",
+                        "image_path": "sprites/heroes/archer/Samurai_Archer/Archer_Stance.png"
+                    },
+                    "cleric": {
+                        "name": "Cleric",
+                        "ability": "Special: Heal + Fireball - Support magic",
+                        "description": "Support with healing and magic damage",
+                        "image_path": "sprites/heroes/cleric/Fire_Cleric/Cleric_Stance.png"
+                    }
+                }
+                
+                # Combine database stats with character-specific info
+                characters[hero_type] = {
+                    "name": abilities[hero_type]["name"],
+                    "stats": stats,
+                    "ability": abilities[hero_type]["ability"],
+                    "description": abilities[hero_type]["description"],
+                    "image_path": abilities[hero_type]["image_path"],
+                    # Store raw stats for potential use
+                    "raw_stats": {
+                        "max_health": max_health,
+                        "speed": speed,
+                        "damage": damage,
+                        "attack_range": attack_range,
+                        "attack_speed": attack_speed,
+                        "special_cooldown": special_cooldown,
+                        "defense": defense,
+                        "critical_chance": critical_chance,
+                        "critical_damage": critical_damage
+                    }
+                }
+            
+            return characters
+            
+        except Exception as e:
+            print(f"Error loading character data from database: {e}")
+            # Fallback to hardcoded stats if database fails
+            return {
+                "knight": {
+                    "name": "Knight",
+                    "stats": ["HP: 375", "Attack: 55", "Speed: 12", "Range: 80"],
+                    "ability": "Special: Shield Bash - Stuns enemies",
+                    "description": "Tank with high defense and health",
+                    "image_path": "sprites/heroes/knight/Knight_1/Knight_Stance.png"
+                },
+                "archer": {
+                    "name": "Archer",
+                    "stats": ["HP: 150", "Attack: 40", "Speed: 10", "Range: 120"],
+                    "ability": "Special: Rain of Arrows - Multiple projectiles",
+                    "description": "Ranged attacker with high critical chance",
+                    "image_path": "sprites/heroes/archer/Samurai_Archer/Archer_Stance.png"
+                },
+                "cleric": {
+                    "name": "Cleric",
+                    "stats": ["HP: 250", "Attack: 85", "Speed: 8", "Range: 60"],
+                    "ability": "Special: Heal + Fireball - Support magic",
+                    "description": "Support with healing and magic damage",
+                    "image_path": "sprites/heroes/cleric/Fire_Cleric/Cleric_Stance.png"
+                }
+            }
     
     def __create_selection_buttons(self) -> List[Button]:
         """
