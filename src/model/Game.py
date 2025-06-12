@@ -443,10 +443,22 @@ class Game:
         # Reposition hero in the new room
         self._reposition_hero_after_door_traversal()
 
+        # TELEPORT CAMERA to follow the hero immediately (no smooth transition)
+        if self._active_hero and self._current_room:
+            target_camera_x = self._active_hero.x - self.width // 2
+            target_camera_y = self._active_hero.y - self.height // 2
+
+            # Constrain to room bounds
+            max_camera_x = max(0, self._current_room.width - self.width)
+            max_camera_y = max(0, self._current_room.height - self.height)
+
+            self._camera_x = max(0, min(target_camera_x, max_camera_x))
+            self._camera_y = max(0, min(target_camera_y, max_camera_y))
+
         # Clear any room-specific enemies/items if needed
         self._handle_room_change()
 
-        #update minimap
+        # update minimap
         self.__minimap_integration.update_player_position(self._dungeon_manager)
 
         # Clear pending door
