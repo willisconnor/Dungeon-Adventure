@@ -655,26 +655,35 @@ class Room:
                                           entity_height: int = 32) -> Tuple[int, int]:
         """
         Get spawn position for entity entering from specified direction
-
-        Args:
-            from_direction: Direction entity is coming from
-            entity_width: Width of entity
-            entity_height: Height of entity
-
-        Returns:
-            (x, y) position where entity should spawn
         """
-        # Get the opposite direction door (where we're entering through)
-        opposite_direction = self.__get_opposite_direction(from_direction)
-        door = self.__doors.get(opposite_direction)
+        print(f"DEBUG: from_direction = {from_direction}")
 
-        if door:
-            return door.get_spawn_position_for_entering_entity(
-                self.__width, self.__height, self.__floor_y, entity_width, entity_height
-            )
-        else:
-            # Fallback to center if no door found
-            return (self.__width // 2 - entity_width // 2, self.__floor_y - entity_height)
+        # Spawn near the SAME direction door (not opposite)
+        target_door = self.__doors.get(from_direction)
+        print(f"DEBUG: target_door exists = {target_door is not None}")
+
+        if target_door:
+            spawn_offset = 100
+
+            if from_direction == Direction.LEFT:
+                print("DEBUG: Spawning near LEFT door")
+                return (target_door.x + 64 + spawn_offset, self.__floor_y - entity_height)
+            elif from_direction == Direction.RIGHT:
+                print("DEBUG: Spawning near RIGHT door")
+                return (target_door.x - spawn_offset - entity_width, self.__floor_y - entity_height)
+            elif from_direction == Direction.UP:
+                print("DEBUG: Spawning near UP door")
+                door_center_x = target_door.x + 32
+                # Always spawn on the floor, just positioned horizontally near the UP door
+                return (door_center_x - entity_width // 2, self.__floor_y - entity_height)
+            elif from_direction == Direction.DOWN:
+                print("DEBUG: Spawning near DOWN door")
+                door_center_x = target_door.x + 32
+                # Always spawn on the floor, just positioned horizontally near the DOWN door
+                return (door_center_x - entity_width // 2, self.__floor_y - entity_height)
+
+        print("DEBUG: Using fallback position")
+        return (self.__width // 2 - entity_width // 2, self.__floor_y - entity_height)
 
     def __get_opposite_direction(self, direction: Direction) -> Direction:
         """Get opposite direction"""
@@ -1015,30 +1024,28 @@ class DungeonManager:
         return (0 <= pos[0] < self.__grid_height and 0 <= pos[1] < self.__grid_width)
 
     def __get_direction_between_rooms(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> Optional[Direction]:
-        """
-        Get the direction from one room to another
-
-        Args:
-            from_pos: Starting room position
-            to_pos: Destination room position
-
-        Returns:
-            Direction from from_pos to to_pos, or None if not adjacent
-        """
+        """Get the direction from one room to another"""
         dr = to_pos[0] - from_pos[0]
         dc = to_pos[1] - from_pos[1]
 
-        if dr == 0 and dc == 1:
+        print(f"DEBUG: from_pos = {from_pos}, to_pos = {to_pos}")
+        print(f"DEBUG: dr = {dr}, dc = {dc}")
+
+        if dr == 1 and dc == 0:
+            print("DEBUG: Returning RIGHT")
             return Direction.RIGHT
-        elif dr == 0 and dc == -1:
-            return Direction.LEFT
-        elif dr == 1 and dc == 0:
-            return Direction.DOWN
         elif dr == -1 and dc == 0:
+            print("DEBUG: Returning LEFT")
+            return Direction.LEFT
+        elif dr == 0 and dc == 1:
+            print("DEBUG: Returning DOWN")
+            return Direction.DOWN
+        elif dr == 0 and dc == -1:
+            print("DEBUG: Returning UP")
             return Direction.UP
         else:
+            print("DEBUG: Returning None")
             return None
-
     def get_current_room(self) -> Optional[Room]:
         """Get the current room"""
         if self.__current_room_pos:
