@@ -16,7 +16,7 @@ class Archer(Hero):
 
     def get_attack_hitbox(self):
         """Override to provide different attack hitbox for archer"""
-        if not self.is_attacking() and not self.is_using_special():
+        if not self.is_attacking and not self.using_special:
             return None
 
         # Archer hitbox matches sprite width (128)
@@ -34,7 +34,7 @@ class Archer(Hero):
 
     def attack(self, targets):
         """Override attack to fire arrows"""
-        if not self.is_attacking() or not self.is_alive():
+        if not self.is_attacking or not self.is_alive:
             return []
 
         # Track if we hit any targets

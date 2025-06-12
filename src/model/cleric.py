@@ -1,3 +1,4 @@
+import pygame
 from src.model.DungeonEntity import Direction, AnimationState
 from src.model.DungeonHero import Hero
 
@@ -56,7 +57,7 @@ class Cleric(Hero):
 
     def get_attack_hitbox(self):
         """Get hitbox for current attack"""
-        if not self.is_attacking() and not self.is_using_special():
+        if not self.is_attacking and not self.using_special:
             return None
 
         # Create attack hitbox based on character direction
@@ -74,7 +75,7 @@ class Cleric(Hero):
 
     def attack(self, targets):
         """Attempt to attack a list of target entities"""
-        if (not self.is_attacking() and not self.is_using_special()) or not self.is_alive():
+        if (not self.is_attacking and not self.using_special) or not self.is_alive:
             return []
 
         hit_targets = []
@@ -100,7 +101,7 @@ class Cleric(Hero):
 
     def heal_ally(self, ally):
         """Heal an ally hero"""
-        if not self.is_alive() or ally is None or not ally.is_alive():
+        if not self.is_alive or ally is None or not ally.is_alive:
             return 0
 
         # Calculate healing amount (can be modified by abilities or potions)

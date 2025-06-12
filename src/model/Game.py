@@ -368,8 +368,12 @@ class Game:
                 prev_x = self._active_hero.x
                 prev_y = self._active_hero.y
 
-                # Check for Q key press for basic attack
-                space_pressed = keys[pygame.K_q]  # Q key is now basic attack
+                # Check for SPACE key press for basic attack
+                space_pressed = keys[pygame.K_SPACE]  # SPACE key is now basic attack
+                
+                # Check for Q key press for special ability
+                if keys[pygame.K_q] and self._active_hero.special_cooldown_remaining <= 0:
+                    self._active_hero.activate_special_ability()
                 
                 # handle hero input
                 self._active_hero.handle_input(keys, space_pressed)
@@ -1114,7 +1118,7 @@ class Game:
                                            (200, 200, 200))
             self.screen.blit(cd_text, (10, 70))
         else:
-            cd_text = self._ui_font.render("Attack (Q): Ready!", True, (0, 255, 0))
+            cd_text = self._ui_font.render("Special (Q): Ready!", True, (0, 255, 0))
             self.screen.blit(cd_text, (10, 70))
 
         # Draw pillar collection UI (bottom center)
@@ -1125,8 +1129,8 @@ class Game:
         # Controls reminder (bottom right)
         controls = [
             "A/D - Move",
-            "Q - Attack"
-
+            "SPACE - Attack",
+            "Q - Special"
         ]
 
         y_offset = self.height - 100
