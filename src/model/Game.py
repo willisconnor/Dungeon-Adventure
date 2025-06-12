@@ -806,9 +806,9 @@ class Game:
                     pygame.draw.rect(self.screen, color, hero_rect)
 
                 # Highlight active hero
-                if hero == self._active_hero:
-                    highlight_rect = pygame.Rect(screen_x, screen_y, hero.width, hero.height)
-                    pygame.draw.rect(self.screen, (255, 255, 0), highlight_rect, 3)
+                #if hero == self._active_hero:
+                    #highlight_rect = pygame.Rect(screen_x, screen_y, hero.width, hero.height)
+                    #pygame.draw.rect(self.screen, (255, 255, 0), highlight_rect, 3)
 
                 # Draw attack hitbox for debugging
                 if hero.is_attacking:
@@ -938,10 +938,8 @@ class Game:
         controls_text = [
             "Controls:",
             "A/D - Move Left/Right",
-            "SPACE - Attack",
-            "Q - Special Ability",
-            "E - Defend",
-            "1/2/3 - Switch Heroes"
+            "Q - Attack"
+
         ]
 
         y_offset = 500
@@ -1037,8 +1035,8 @@ class Game:
                     pygame.draw.rect(self.screen, color, hero_rect)
 
                 # Highlight active hero
-                if hero == self._active_hero:
-                    pygame.draw.rect(self.screen, (255, 255, 0), hero_rect, 3)
+                #if hero == self._active_hero:
+                    #pygame.draw.rect(self.screen, (255, 255, 0), hero_rect, 3)
 
                 # Flash if invulnerable
                 if not hero.is_invulnerable or int(hero.invulnerable_timer * 10) % 2:
@@ -1116,7 +1114,7 @@ class Game:
                                            (200, 200, 200))
             self.screen.blit(cd_text, (10, 70))
         else:
-            cd_text = self._ui_font.render("Special (Q): Ready!", True, (0, 255, 0))
+            cd_text = self._ui_font.render("Attack (Q): Ready!", True, (0, 255, 0))
             self.screen.blit(cd_text, (10, 70))
 
         # Draw pillar collection UI (bottom center)
@@ -1127,9 +1125,8 @@ class Game:
         # Controls reminder (bottom right)
         controls = [
             "A/D - Move",
-            "SPACE - Attack",
-            "Q - Special",
-            "E - Defend"
+            "Q - Attack"
+
         ]
 
         y_offset = self.height - 100
