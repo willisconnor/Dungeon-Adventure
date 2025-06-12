@@ -1131,7 +1131,8 @@ class Game:
         controls = [
             "A/D - Move",
             "Q - Special",
-            "E - Defend"
+            "E - Defend",
+            "Space - Attack"
         ]
 
         y_offset = self.height - 100
