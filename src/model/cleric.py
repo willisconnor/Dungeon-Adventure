@@ -37,7 +37,7 @@ class Cleric(Hero):
             else:
                 start_x = self.get_x() - 20
 
-            start_y = self.get_y() + 10  # Adjust to match animation
+            start_y = self.get_y() - 10  # Raised by 20 pixels (was +10, now -10)
 
             # Create and cast fireball
             fireball = Projectile(

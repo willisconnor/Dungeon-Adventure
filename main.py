@@ -19,7 +19,6 @@ def main():
 
     #iniitialiize pygame
     pygame.init()
-
     #initialize db if doesnt exist
     if not os.path.exists('game_data.db'):
         print("Initializing database...")
@@ -46,8 +45,7 @@ def main():
     print("Starting game...")
     print("Controls: ")
     print("- A/D: Move left/right")
-    print("- SPACE: Attack")
-    print("- Q: Special ability")
+    print("- Q: Basic attack (special ability)")
     print("- E: Defend")
     print("- 1/2/3: Switch heroes")
     print("- ESC: Pause")

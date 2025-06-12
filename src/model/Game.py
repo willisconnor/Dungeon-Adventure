@@ -194,10 +194,21 @@ class Game:
         self._initialize_dungeon()
 
         if self._current_room:
-            start_x, start_y = self._dungeon_manager.get_player_spawn_position_for_current_room()
-
-            hero = self._create_hero(self._selected_hero_type, start_x, start_y)
+            # Create hero first to get its dimensions
+            hero = self._create_hero(self._selected_hero_type, 0, 0)  # Temporary position
             if hero:
+                # Get proper spawn position using hero's actual dimensions
+                start_x, start_y = self._dungeon_manager.get_player_spawn_position_for_current_room(
+                    hero.width, hero.height
+                )
+                
+                # Set the correct position
+                hero.x = start_x
+                hero.y = start_y
+                
+                # Update ground_y to match the room's floor (top of floor)
+                hero.ground_y = self._current_room.floor_y - hero.height
+                
                 self._heroes[self._selected_hero_type] = hero
                 self._active_hero = hero
 
@@ -267,8 +278,8 @@ class Game:
             elif self.state in (GameState.GAME_OVER, GameState.VICTORY):
                 self._handle_end_state_input(event.key)
         elif event.type == pygame.KEYUP:
-            if event.key == pygame.K_SPACE:
-                self._space_pressed = False
+            # Space bar handling removed - Q is now the basic attack
+            pass
         elif hasattr(pygame, 'WINDOWMAXIMIZED') and event.type == pygame.WINDOWMAXIMIZED:
             # Handle window maximize button click
             if not self.is_fullscreen:
@@ -305,8 +316,6 @@ class Game:
         """Handle input during gameplay"""
         if key == pygame.K_ESCAPE:
             self.set_game_state(GameState.PAUSED)
-        elif key == pygame.K_SPACE:
-            self._space_pressed = True
         elif key == pygame.K_F11:
             self._toggle_fullscreen()
         elif key == pygame.K_m:
@@ -359,8 +368,11 @@ class Game:
                 prev_x = self._active_hero.x
                 prev_y = self._active_hero.y
 
+                # Check for Q key press for basic attack
+                space_pressed = keys[pygame.K_q]  # Q key is now basic attack
+                
                 # handle hero input
-                self._active_hero.handle_input(keys, self._space_pressed)
+                self._active_hero.handle_input(keys, space_pressed)
 
                 # check for door traversal
                 self._check_door_traversal(prev_x, prev_y)
@@ -449,6 +461,9 @@ class Game:
 
         self._active_hero.x = spawn_x
         self._active_hero.y = spawn_y
+        
+        # Update ground_y to match the new room's floor (top of floor)
+        self._active_hero.ground_y = self._current_room.floor_y - self._active_hero.height
 
     def _handle_room_change(self):
         """Handle any room-specific changes when entering a new room"""
@@ -769,7 +784,11 @@ class Game:
                 # Draw sprite if available
                 current_sprite = hero.get_current_sprite()
                 if current_sprite:
-                    self.screen.blit(current_sprite, (screen_x, screen_y))
+                    sprite_rect = current_sprite.get_rect()
+                    # Offset sprite so its bottom aligns with the floor (hitbox stays the same)
+                    offset_x = (hero.width - sprite_rect.width) // 2
+                    offset_y = hero.height - sprite_rect.height
+                    self.screen.blit(current_sprite, (screen_x + offset_x, screen_y + offset_y))
                 else:
                     # Fallback: colored rectangle
                     hero_rect = pygame.Rect(screen_x, screen_y, hero.width, hero.height)
@@ -807,21 +826,27 @@ class Game:
         """Draw projectiles with camera offset"""
         for projectile in self.projectile_manager.projectiles:
             if projectile.active:
-                proj_rect = pygame.Rect(
-                    projectile.x - self._camera_x,
-                    projectile.y - self._camera_y,
-                    projectile.width,
-                    projectile.height
-                )
+                # Calculate screen position
+                screen_x = projectile.x - self._camera_x
+                screen_y = projectile.y - self._camera_y
 
-                # Different colors for different projectile types
-                from src.model.ProjectileManager import ProjectileType
-                if projectile.projectile_type == ProjectileType.ARROW:
-                    color = (200, 200, 100)
-                else:  # Fireball
-                    color = (255, 100, 0)
+                # Try to get sprite first
+                current_sprite = projectile.get_current_sprite()
+                if current_sprite:
+                    # Draw the animated sprite
+                    self.screen.blit(current_sprite, (screen_x, screen_y))
+                else:
+                    # Fallback: draw colored rectangle
+                    proj_rect = pygame.Rect(screen_x, screen_y, projectile.width, projectile.height)
 
-                pygame.draw.rect(self.screen, color, proj_rect)
+                    # Different colors for different projectile types
+                    from src.model.ProjectileManager import ProjectileType
+                    if projectile.projectile_type == ProjectileType.ARROW:
+                        color = (200, 200, 100)
+                    else:  # Fireball
+                        color = (255, 100, 0)
+
+                    pygame.draw.rect(self.screen, color, proj_rect)
 
     def _draw_room_objects(self):
         """Draw room-specific objects like pillars, chests, etc."""

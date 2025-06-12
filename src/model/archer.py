@@ -19,16 +19,16 @@ class Archer(Hero):
         if not self.is_attacking() and not self.is_using_special():
             return None
 
-        # Archer has longer, narrower hitbox
-        width = self.get_attack_range() * 2  # Longer range
-        height = 40  # Narrower
+        # Archer hitbox matches sprite width (128)
+        width = 128
+        height = 40  # Keep height as before, or adjust if needed
 
         if self.get_direction() == Direction.RIGHT:
-            x = self.get_x() + 25  # Offset from character center
-            y = self.get_y() - height // 2 + 10  # Adjusted to match animation
+            x = self.get_x()  # Start at sprite's left
+            y = self.get_y() + (128 - height) // 2  # Vertically center
         else:  # Direction.LEFT
-            x = self.get_x() - 25 - width  # Offset from character center
-            y = self.get_y() - height // 2 + 10  # Adjusted to match animation
+            x = self.get_x()  # Start at sprite's left
+            y = self.get_y() + (128 - height) // 2
 
         return pygame.Rect(x, y, width, height)
 

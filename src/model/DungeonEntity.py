@@ -101,11 +101,15 @@ class DungeonEntity(ABC, pygame.sprite.Sprite):
 
     def _update_hitbox(self):
         """update hitbox based on entity position"""
-        """ Divided by 2 calculations put it near the center of sprite?"""
-        hitbox_width = self.width //2 #can change this whenever
-        hitbox_height = self.height //2
-
-        self.hitbox = pygame.Rect(self.x//2, self.y//2, hitbox_width, hitbox_height) #maybe tweak this later
+        hitbox_width = 64
+        hitbox_height = 64
+        # Center the hitbox on the character
+        self.hitbox = pygame.Rect(
+            self.x + (self.width - hitbox_width) // 2,
+            self.y + (self.height - hitbox_height) // 2,
+            hitbox_width,
+            hitbox_height
+        )
 
     def _update_invulnerability(self, dt):
         """update invuln timer"""
