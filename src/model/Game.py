@@ -94,6 +94,7 @@ class Game:
         self._selected_hero_type = None
         self._hero_selection_made = False
         self._space_pressed = False
+        self._h_key_pressed = False  # Track H key state for potion usage
 
         self._dungeon_manager = None
         self._current_room = None
@@ -396,6 +397,13 @@ class Game:
                 if keys[pygame.K_q] and self._active_hero.special_cooldown_remaining <= 0:
                     self._active_hero.activate_special_ability()
                 
+                # Check for H key press for using healing potion
+                if keys[pygame.K_h] and not self._h_key_pressed:
+                    self._use_healing_potion()
+                    self._h_key_pressed = True
+                elif not keys[pygame.K_h]:
+                    self._h_key_pressed = False
+                
                 # handle hero input
                 self._active_hero.handle_input(keys, False)  # Pass False since we handle attack separately
 
@@ -405,6 +413,9 @@ class Game:
                 # Check for pillar collection
                 self._check_pillar_collection()
 
+                # Check for potion collection
+                self._check_potion_collection()
+
             self.all_sprites.update(dt)
             self._handle_collisions()
             self._update_game_objects(dt)
@@ -413,6 +424,9 @@ class Game:
 
             # Update pillars
             self._dungeon_manager.update_pillars(dt)
+
+            # Update potions
+            self._dungeon_manager.update_potions(dt)
 
     def _check_door_traversal(self, prev_x: int, prev_y: int):
         """Check if hero has moved into a door and handle traversal"""
@@ -772,6 +786,7 @@ class Game:
         # Only draw pillars when not transitioning between rooms
         if not self._transition_manager.is_transitioning:
             self._dungeon_manager.draw_pillars(self.screen, (self._camera_x, self._camera_y))
+            self._dungeon_manager.draw_potions(self.screen, (self._camera_x, self._camera_y))
 
         self._draw_enemies()
         self._draw_heroes()
@@ -1181,12 +1196,18 @@ class Game:
         pillar_ui_y = self.height - 40
         self._dungeon_manager.pillar_manager.draw_collection_ui(self.screen, pillar_ui_x, pillar_ui_y)
 
+        # Draw potion collection UI (above pillar collection)
+        potion_ui_x = self.width // 2 - 100  # Center the 200px wide UI
+        potion_ui_y = self.height - 80
+        self._dungeon_manager.potion_manager.draw_collection_ui(self.screen, potion_ui_x, potion_ui_y)
+
         # Controls reminder (bottom right)
         controls = [
             "A/D - Move",
             "Q - Special",
             "E - Defend",
-            "Space - Attack"
+            "Space - Attack",
+            "H - Use Potion"
         ]
 
         y_offset = self.height - 100
@@ -1254,6 +1275,47 @@ class Game:
         if collected_pillar:
             # Could trigger visual/audio feedback here
             print(f"Collected {collected_pillar.name}!")
+
+    # ADD POTION COLLECTION
+    def _check_potion_collection(self):
+        """Check if hero collects potions in current room"""
+        if not self._current_room or not self._active_hero:
+            return
+
+        collected_potion = self._dungeon_manager.check_potion_collection(
+            self._active_hero.x,
+            self._active_hero.y,
+            self._active_hero.width,
+            self._active_hero.height
+        )
+
+        if collected_potion:
+            # Could trigger visual/audio feedback here
+            print(f"Collected {collected_potion.name} potion!")
+            print(f"Press H to use healing potions!")
+
+    def _use_healing_potion(self):
+        """Use a healing potion if available"""
+        if not self._active_hero:
+            return
+
+        # Check if player has potions and needs healing
+        if (self._dungeon_manager.potion_manager.consumable_potions > 0 and 
+            self._active_hero.health < self._active_hero.max_health):
+            
+            # Use the potion
+            if self._dungeon_manager.potion_manager.use_healing_potion():
+                # Heal the player for 30 HP
+                heal_amount = min(30, self._active_hero.max_health - self._active_hero.health)
+                self._active_hero.health += heal_amount
+                print(f"Used healing potion! Restored {heal_amount} health!")
+                print(f"Remaining potions: {self._dungeon_manager.potion_manager.consumable_potions}")
+            else:
+                print("No potions available!")
+        elif self._dungeon_manager.potion_manager.consumable_potions == 0:
+            print("No healing potions available!")
+        elif self._active_hero.health >= self._active_hero.max_health:
+            print("Health is already full!")
 
     def unlock_boss_doors(self):
         """Unlock boss room doors when requirements are met"""

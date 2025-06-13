@@ -14,6 +14,7 @@ from src.model.Monster import Monster
 from src.model.Platform import Platform
 # Add this import at the top of RoomDungeonSystem.py
 from src.model.Pillar import Pillar, PillarType, PillarManager
+from src.model.Potion import Potion, PotionType, PotionManager
 from src.model.EnemySpawnManager import EnemySpawnManager
 
 
@@ -736,6 +737,9 @@ class DungeonManager:
 
         # Initialize pillar manager
         self.__pillar_manager = PillarManager()
+        
+        # Initialize potion manager
+        self.__potion_manager = PotionManager()
 
         self.pillars_collected = 0
         self.boss_defeated = False
@@ -782,6 +786,11 @@ class DungeonManager:
     def pillar_manager(self) -> PillarManager:
         """Get the pillar manager"""
         return self.__pillar_manager
+
+    @property
+    def potion_manager(self) -> PotionManager:
+        """Get the potion manager"""
+        return self.__potion_manager
 
     def check_pillar_collection(self, player_x: int, player_y: int, player_width: int = 32, player_height: int = 32) -> \
     Optional[Pillar]:
@@ -930,6 +939,9 @@ class DungeonManager:
         # Distribute pillars
         self.__distribute_pillars()
 
+        # Distribute potions
+        self.__distribute_potions()
+
         # Lock boss room doors initially
         self.__lock_boss_room_doors()
 
@@ -975,6 +987,40 @@ class DungeonManager:
 
                 pillar = Pillar(pillar_type, pillar_x, pillar_y)
                 self.__pillar_manager.add_pillar_to_room(room_pos, pillar)
+
+    def __distribute_potions(self):
+        """Distribute healing potions throughout the dungeon"""
+        available_rooms = []
+        
+        # Find available rooms (not start room, not boss room)
+        for row in range(self.__grid_height):
+            for col in range(self.__grid_width):
+                room = self.__dungeon_grid[row][col]
+                if room and not room.is_start_room() and not room.is_boss_room():
+                    available_rooms.append((row, col))
+
+        # Shuffle available rooms for random distribution
+        random.shuffle(available_rooms)
+        
+        # Determine number of potions to spawn (1-3 per room, but not every room)
+        num_rooms_with_potions = min(len(available_rooms), random.randint(2, 4))
+        
+        for i in range(num_rooms_with_potions):
+            if i < len(available_rooms):
+                room_pos = available_rooms[i]
+                room = self.__dungeon_grid[room_pos[0]][room_pos[1]]
+                
+                # Determine number of potions in this room (1-2)
+                num_potions_in_room = random.randint(1, 2)
+                
+                for _ in range(num_potions_in_room):
+                    # Random position in room (avoiding edges and other objects)
+                    potion_x = random.randint(150, room.width - 150)
+                    potion_y = room.floor_y - 80  # Slightly above floor
+                    
+                    # Create healing potion
+                    potion = Potion(PotionType.HEALING, potion_x, potion_y)
+                    self.__potion_manager.add_potion_to_room(room_pos, potion)
 
     def __lock_boss_room_doors(self):
         """Lock all doors leading to boss room"""
@@ -1073,10 +1119,20 @@ class DungeonManager:
         if self.__current_room_pos:
             self.__pillar_manager.update_pillars_in_room(self.__current_room_pos, dt)
 
+    def update_potions(self, dt: float):
+        """Update potions in current room"""
+        if self.__current_room_pos:
+            self.__potion_manager.update_potions_in_room(self.__current_room_pos, dt)
+
     def draw_pillars(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
         """Draw pillars in current room"""
         if self.__current_room_pos:
             self.__pillar_manager.draw_pillars_in_room(self.__current_room_pos, surface, camera_offset)
+
+    def draw_potions(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
+        """Draw potions in current room"""
+        if self.__current_room_pos:
+            self.__potion_manager.draw_potions_in_room(self.__current_room_pos, surface, camera_offset)
 
     def try_enter_door(self, player_x: int, player_y: int) -> bool:
         """
@@ -1165,3 +1221,17 @@ class DungeonManager:
         if self.__is_valid_position(pos):
             return self.__dungeon_grid[pos[0]][pos[1]]
         return None
+
+    def check_potion_collection(self, player_x: int, player_y: int, player_width: int = 32, player_height: int = 32) -> \
+    Optional[Potion]:
+        """Check if player collects a potion in current room"""
+        if not self.__current_room_pos:
+            return None
+
+        player_rect = pygame.Rect(player_x, player_y, player_width, player_height)
+        collected_potion = self.__potion_manager.check_potion_collection(self.__current_room_pos, player_rect)
+
+        if collected_potion:
+            print(f"Collected {collected_potion.name} potion!")
+
+        return collected_potion
