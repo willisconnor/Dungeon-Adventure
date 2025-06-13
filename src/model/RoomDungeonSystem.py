@@ -14,6 +14,7 @@ from src.model.Monster import Monster
 from src.model.Platform import Platform
 # Add this import at the top of RoomDungeonSystem.py
 from src.model.Pillar import Pillar, PillarType, PillarManager
+from src.model.EnemySpawnManager import EnemySpawnManager
 
 
 class DoorType(Enum):
