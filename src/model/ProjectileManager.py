@@ -26,11 +26,11 @@ class Projectile:
 
         # Set projectile dimensions based on type
         if projectile_type == ProjectileType.ARROW:
-            self.width = 32
-            self.height = 8
+            self.width = 64
+            self.height = 96  # Increased height for better visibility
         elif projectile_type == ProjectileType.FIREBALL:
-            self.width = 24
-            self.height = 24
+            self.width = 64  # Updated to match Charge.png frame size
+            self.height = 64
 
         # Initialize hitbox
         self.hitbox = pygame.Rect(x, y, self.width, self.height)
@@ -38,6 +38,11 @@ class Projectile:
         # Animation properties
         self.frame_index = 0
         self.animation_counter = 0
+        self.frames = []  # Store loaded frames
+        self.frame_count = 0
+
+        # Load sprite frames
+        self._load_sprite_frames()
 
         # Cache the starting position for range calculation
         self.start_x = x
@@ -57,6 +62,54 @@ class Projectile:
         self.is_homing = False
         self.target = None
         self.homing_strength = 0.1  # How strongly it homes in on target
+
+    def _load_sprite_frames(self):
+        """Load sprite frames for projectile animation"""
+        try:
+            if self.projectile_type == ProjectileType.FIREBALL:
+                # Load fireball sprite sheet from Charge.png
+                sprite_path = "assets/sprites/heroes/cleric/Fire_Cleric/Charge.png"
+                sprite_sheet = pygame.image.load(sprite_path).convert_alpha()
+                
+                # Get sprite sheet dimensions
+                sheet_width, sheet_height = sprite_sheet.get_size()
+                
+                # Use 64x64 frames
+                frame_width = 64
+                frame_height = 64
+                num_frames = sheet_width // frame_width
+                
+                # Extract frames from sprite sheet
+                self.frames = []
+                for i in range(num_frames):
+                    x = i * frame_width
+                    frame = pygame.Surface((frame_width, frame_height), pygame.SRCALPHA)
+                    frame.blit(sprite_sheet, (0, 0), (x, 0, frame_width, frame_height))
+                    self.frames.append(frame)
+                
+                self.frame_count = len(self.frames)
+                print(f"Loaded {self.frame_count} fireball frames from Charge.png (64x64)")
+                
+            elif self.projectile_type == ProjectileType.ARROW:
+                # Load arrow sprite
+                sprite_path = "assets/sprites/heroes/archer/Samurai_Archer/Arrow.png"
+                arrow_sprite = pygame.image.load(sprite_path).convert_alpha()
+                self.frames = [arrow_sprite]
+                self.frame_count = 1
+                
+        except Exception as e:
+            print(f"Error loading projectile sprites: {e}")
+            # Fallback: create colored rectangles
+            if self.projectile_type == ProjectileType.FIREBALL:
+                fallback_sprite = pygame.Surface((32, 32), pygame.SRCALPHA)
+                fallback_sprite.fill((255, 100, 0))  # Orange color
+                self.frames = [fallback_sprite]
+            else:  # Arrow
+                fallback_sprite = pygame.Surface((32, 8), pygame.SRCALPHA)
+                fallback_sprite.fill((200, 200, 100))  # Yellow color
+                self.frames = [fallback_sprite]
+            
+            self.frame_count = 1
 
     def update(self, dt):
         """Update projectile position and check if it's expired"""
@@ -113,9 +166,7 @@ class Projectile:
             self.animation_counter += dt * 60
             if self.animation_counter >= frame_rate:
                 self.animation_counter = 0
-                # Get frame count from database or use default
-                frame_count = 8  # Default for fireball animation
-                self.frame_index = (self.frame_index + 1) % frame_count
+                self.frame_index = (self.frame_index + 1) % self.frame_count
 
     def check_collision(self, targets):
         """Check collision with potential targets"""
@@ -144,6 +195,12 @@ class Projectile:
                     # Fireball continues but can hit each target only once
 
         return hit_targets
+
+    def get_current_sprite(self):
+        """Get the current sprite frame for this projectile"""
+        if self.frames and self.frame_index < len(self.frames):
+            return self.frames[self.frame_index]
+        return None
 
     def get_sprite_path(self):
         """Get the sprite path for current projectile frame"""

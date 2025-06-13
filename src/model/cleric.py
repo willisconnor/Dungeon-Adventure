@@ -1,3 +1,4 @@
+import pygame
 from src.model.DungeonEntity import Direction, AnimationState
 from src.model.DungeonHero import Hero
 
@@ -31,13 +32,13 @@ class Cleric(Hero):
         if self.__projectile_manager is not None:
             from src.model.ProjectileManager import Projectile, ProjectileType
 
-            # Calculate fireball starting position
+            # Calculate fireball starting position at the center of the cleric
             if self.get_direction() == Direction.RIGHT:
-                start_x = self.get_x() + 50
+                start_x = self.get_x() + self.width // 2  # Center horizontally
             else:
-                start_x = self.get_x() - 20
+                start_x = self.get_x() + self.width // 2  # Center horizontally
 
-            start_y = self.get_y() + 10  # Adjust to match animation
+            start_y = self.get_y() + self.height // 2  # Center vertically
 
             # Create and cast fireball
             fireball = Projectile(
@@ -56,7 +57,7 @@ class Cleric(Hero):
 
     def get_attack_hitbox(self):
         """Get hitbox for current attack"""
-        if not self.is_attacking() and not self.is_using_special():
+        if not self.is_attacking and not self.using_special:
             return None
 
         # Create attack hitbox based on character direction
@@ -64,17 +65,17 @@ class Cleric(Hero):
         height = 80
 
         if self.get_direction() == Direction.RIGHT:
-            x = self.get_x() + 25
-            y = self.get_y() - height // 2
+            x = self.get_x() + self.width  # Start at the right edge of the character
+            y = self.get_y() + self.height - height  # Bottom of hitbox touches sprite feet
         else:
-            x = self.get_x() - 25 - width
-            y = self.get_y() - height // 2
+            x = self.get_x() - width  # Start at the left edge of the character
+            y = self.get_y() + self.height - height  # Bottom of hitbox touches sprite feet
 
         return pygame.Rect(x, y, width, height)
 
     def attack(self, targets):
         """Attempt to attack a list of target entities"""
-        if (not self.is_attacking() and not self.is_using_special()) or not self.is_alive():
+        if (not self.is_attacking and not self.using_special) or not self.is_alive:
             return []
 
         hit_targets = []
@@ -100,7 +101,7 @@ class Cleric(Hero):
 
     def heal_ally(self, ally):
         """Heal an ally hero"""
-        if not self.is_alive() or ally is None or not ally.is_alive():
+        if not self.is_alive or ally is None or not ally.is_alive:
             return 0
 
         # Calculate healing amount (can be modified by abilities or potions)

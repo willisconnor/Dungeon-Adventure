@@ -2,6 +2,7 @@ import os
 
 from src.model.DungeonCharacter import DungeonCharacter
 from src.model.DungeonEntity import AnimationState, Direction
+from src.utils.SpriteSheet import SpriteSheet
 import pygame
 import sqlite3
 import random
@@ -14,47 +15,23 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         #initialize pygame.sprite.Sprite first
         pygame.sprite.Sprite.__init__(self)
 
-        # Set basic hero info
+        # Hero-specific properties
         self.hero_type = hero_type
+        self.name = hero_type.capitalize()
 
-        # Set animation state early — required for frame loading
-        self.animation_state = AnimationState.IDLE
-        self.last_animation_state = AnimationState.IDLE
-
-        # Load stats from database
+        # Load hero stats from database
         stats = self._load_hero_stats()
 
-        width = 64
-        height = 64
-        name = hero_type.capitalize()
-
-        # DEBUG: Print what we're about to pass
-        print("About to call DungeonCharacter.__init__ with:")
-        print(f"x={x}, y={y}, width={width}, height={height}, name={name}")
-        print(f"max_health={stats['max_health']}, health={stats['max_health']}")
-        print(f"speed={stats['speed']}, damage={stats['damage']}")
-
-        # Initialize parent class (sets self.x, self.y, etc.)
-        DungeonCharacter.__init__(self,
-            x, y,
-            width, height,
-            name,
-            stats["max_health"],
-            stats["max_health"],  # current health
-            stats["speed"],
-            stats["damage"],
+        # Initialize DungeonCharacter with loaded stats
+        super().__init__(
+            x=x, y=y,
+            width=128, height=128,
+            name=self.name,
+            max_health=stats["max_health"],
+            health=stats["max_health"],
+            speed=stats["speed"],
+            damage=stats["damage"]
         )
-        self.hero_type = hero_type
-
-        # Load animations after base init (self.x, self.y now exist)
-        self.frame_counts = self._load_frame_counts()
-        self.frames = self._load_all_frames()
-        self.frame_index = 0
-        self.animation_counter = 0
-        self.animation_speed = 0.15
-        self.current_sprite = self.frames[self.animation_state][self.frame_index]
-        self.image = self.current_sprite
-        self.rect = self.image.get_rect(topleft=(self.x, self.y))
 
         # Hero-specific stats
         self.damage = stats["damage"]
@@ -68,7 +45,21 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         # Hero state flags
         self.is_moving = False
         self.is_defending = False
-        self.can_input = True
+
+        # Frame rates for attackTest-style timing
+        self.frame_rates = {
+            AnimationState.IDLE: 6,
+            AnimationState.WALKING: 6,
+            AnimationState.ATTACKING_1: 5,
+            AnimationState.ATTACKING_2: 5,
+            AnimationState.ATTACKING_3: 5,
+            AnimationState.DEFENDING: 6,
+            AnimationState.HURT: 4,
+            AnimationState.DYING: 8,
+            AnimationState.DEAD: 1,
+            AnimationState.SPECIAL_SKILL: 6,
+            AnimationState.FALLING: 6
+        }
 
         # Special ability state
         self.special_cooldown_remaining = 0
@@ -76,56 +67,119 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.special_duration = 1.0  # How long the special ability lasts (1 second)
         self.special_duration_remaining = 0  # Timer for special ability duration
 
-        # Attack state
+        # Attack state - simplified like special ability
         self.is_attacking = False
-        self.attack_timer = 0
+        self.attack_cooldown = 0.5  # Time between attacks (0.3 seconds)
+        self.attack_cooldown_remaining = 0
         self.attack_combo = 0
-        self.attack_complete = True
-        self.attack_window = 0
+        self.combo_window = 1.2
+        self.combo_timer = 0
         self.hit_targets = set()
-        self.attack_duration = 1.0 / stats["attack_speed"]  # Duration based on attack speed (hits per second)
 
-        # Movement/physics state
-        self.is_jumping = False
-        self.is_falling = False
-        self.jump_velocity = 15
-        self.y_velocity = 0
-        self.gravity = 0.8
-        self.ground_y = self.y
+        # Load frame counts for this hero type
+        self.frame_counts = self._load_frame_counts()
+
+        # Load all animation frames
+        self.frames = self._load_all_frames()
+        self.frame_index = 0
+        self.animation_counter = 0
+        self.animation_speed = 0.15
+        self.current_sprite = self.frames[self.animation_state][self.frame_index]
+        self.image = self.current_sprite
+        self.rect = self.image.get_rect(topleft=(self.x, self.y))
+
+        # Ground position for jumping
+        self.ground_y = y
         self.on_ground = True
+        self.is_falling = False
+        self.y_velocity = 0
+        self.gravity = 0.5
+        self.jump_strength = -12
 
     def _load_all_frames(self):
-        """Load all frames for each animation state from sprite sheets"""
+        """Load all frames for each animation state from sprite sheets using SpriteSheet class"""
         conn = sqlite3.connect('game_data.db')
         c = conn.cursor()
 
-        # Load all sprite paths
+        # Load all sprite paths and frame data
         c.execute('''
-            SELECT animation_state, sprite_path
+            SELECT animation_state, sprite_path, frame_count, frame_rate, frame_width, frame_height
             FROM hero_animations
             WHERE hero_type = ?
         ''', (self.hero_type,))
-        sprite_path_rows = c.fetchall()
+        animation_data = c.fetchall()
         conn.close()
 
-        # Convert to dict: {AnimationState: path}
-        path_map = {
-            AnimationState[row[0]]: row[1] for row in sprite_path_rows
-        }
-
+        # Convert to dict: {AnimationState: data}
+        animation_map = {}
+        for row in animation_data:
+            state = AnimationState[row[0]]
+            animation_map[state] = {
+                'path': row[1],
+                'frame_count': row[2],
+                'frame_rate': row[3],
+                'frame_width': row[4],
+                'frame_height': row[5]
+            }
+        # DEBUG: Print what database returns for knight
+        if self.hero_type == "knight":
+            print(f"\n=== KNIGHT DATABASE ENTRIES ===")
+            for state_name, data in animation_map.items():
+                print(f"{state_name.name}: {data['path']}")
+                print(f"  File exists: {os.path.exists(data['path'])}")
+                if "ATTACKING" in state_name.name:
+                    print(f"  *** ATTACK FILE: {data['path']} ***")
         frames = {}
         frame_counts = self.get_frame_counts()
 
-        # Ensure all AnimationStates have at least one frame
+        # Load frames for each animation state
         for state in AnimationState:
-            path = path_map.get(state)
+            data = animation_map.get(state)
             count = frame_counts.get(state, 1)
-            if not path or not os.path.exists(path):
+            
+            if not data or not os.path.exists(data['path']):
+                # FIX KNIGHT ATTACK PATHS - CORRECTED FOR SPRITESHEETS
+                if self.hero_type == "knight":
+                    print("Fixing knight attack paths...")
+                    correct_knight_attacks = {
+                        'ATTACKING_1': {
+                            'path': 'assets/sprites/heroes/knight/Knight_1/Attack1.png',
+                            'frame_count': 5,  # Attack1 has 5 frames
+                            'frame_rate': 0.1,
+                            'frame_width': 64,
+                            'frame_height': 64
+                        },
+                        'ATTACKING_2': {
+                            'path': 'assets/sprites/heroes/knight/Knight_1/Attack2.png',
+                            'frame_count': 4,  # Attack2 has 4 frames
+                            'frame_rate': 0.1,
+                            'frame_width': 64,
+                            'frame_height': 64
+                        },
+                        'ATTACKING_3': {
+                            'path': 'assets/sprites/heroes/knight/Knight_1/Attack3.png',
+                            'frame_count': 4,  # Attack3 has 4 frames
+                            'frame_rate': 0.1,
+                            'frame_width': 64,
+                            'frame_height': 64
+                        }
+                    }
+
+                    for state_name, correct_data in correct_knight_attacks.items():
+                        state = AnimationState[state_name]
+                        if state in animation_map:
+                            print(f"Overriding {state_name}: {animation_map[state]['path']} -> {correct_data['path']}")
+                            animation_map[state] = correct_data
                 # Fallback: use idle frame or colored rectangle
                 if AnimationState.IDLE in frames:
                     frames[state] = frames[AnimationState.IDLE]
                 else:
-                    surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+                    # Create fallback surface with correct size for hero type
+                    if self.hero_type == "archer":
+                        surf = pygame.Surface((64, 128), pygame.SRCALPHA)  # Updated height to 128
+                    else:  # knight and cleric
+                        surf = pygame.Surface((128, 128), pygame.SRCALPHA)
+                    
                     if self.hero_type == "knight":
                         surf.fill((100, 100, 200))
                     elif self.hero_type == "archer":
@@ -136,25 +190,43 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
                         surf.fill((150, 150, 150))
                     frames[state] = [surf for _ in range(count)]
                 continue
-            # Try to load and slice sprite sheet
+
+            # Load sprite sheet and extract frames using SpriteSheet class
             try:
-                sheet = pygame.image.load(path).convert_alpha()
-                frame_count = frame_counts[state]
-                frame_width = sheet.get_width() // frame_count
-                frame_height = sheet.get_height()
+                sheet_image = pygame.image.load(data['path']).convert_alpha()
+                spritesheet = SpriteSheet(sheet_image)
 
-                state_frames = [
-                    sheet.subsurface(pygame.Rect(i * frame_width, 0, frame_width, frame_height))
-                    for i in range(frame_count)
-                ]
+                frame_count = data['frame_count']
+                frame_width = data['frame_width']
+                frame_height = data['frame_height']
 
+                # Extract frames using the SpriteSheet class
+                state_frames = []
+                for i in range(frame_count):
+                    # Scale based on hero type
+                    if self.hero_type == "archer":
+                        # Archer sprites are 64x128, no scaling needed
+                        frame = spritesheet.get_frame(i, frame_width, frame_height, scale=1.0)
+                    else:
+                        # Knight and cleric sprites are 128x128, scale to 128x128
+                        frame = spritesheet.get_frame(i, frame_width, frame_height, scale=1.0)
+                    state_frames.append(frame)
+                
                 frames[state] = state_frames
-            except (pygame.error, FileNotFoundError):
+                print(f"Loaded {len(state_frames)} frames for {state.name} from {data['path']}")
+                
+            except (pygame.error, FileNotFoundError) as e:
+                print(f"Error loading animation {state.name}: {e}")
                 # Fallback if sprite loading fails
                 if AnimationState.IDLE in frames:
                     frames[state] = frames[AnimationState.IDLE]
                 else:
-                    surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+                    # Create fallback surface with correct size for hero type
+                    if self.hero_type == "archer":
+                        surf = pygame.Surface((64, 128), pygame.SRCALPHA)  # Updated height to 128
+                    else:  # knight and cleric
+                        surf = pygame.Surface((128, 128), pygame.SRCALPHA)
+                    
                     if self.hero_type == "knight":
                         surf.fill((100, 100, 200))
                     elif self.hero_type == "archer":
@@ -164,6 +236,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
                     else:
                         surf.fill((150, 150, 150))
                     frames[state] = [surf for _ in range(count)]
+
         return frames
 
     def _load_hero_stats(self):
@@ -206,28 +279,33 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             }
 
     def _load_frame_counts(self):
-        """load animiaton frame coutns from SQLite Database"""
+        """Load animation frame counts and rates from SQLite Database"""
         conn = sqlite3.connect('game_data.db')
         c = conn.cursor()
 
         c.execute('''
-        SELECT animation_state, frame_count
+        SELECT animation_state, frame_count, frame_rate
         FROM hero_animations
         WHERE hero_type = ?''', (self.hero_type,))
 
         results = c.fetchall()
         conn.close()
 
-        #convert results to dictionary
+        # Convert results to dictionaries
         frame_counts = {}
-        for animation_state, frame_count in results:
-            frame_counts[AnimationState[animation_state]] = frame_count
+        frame_rates = {}
+        for animation_state, frame_count, frame_rate in results:
+            state = AnimationState[animation_state]
+            frame_counts[state] = frame_count
+            frame_rates[state] = frame_rate
 
-        #default values if databse doesnt have all states
-        #arbitrarily decided, might cause skipping in anim states
+        # Store frame rates for use in animation updates
+        self.frame_rates = frame_rates
+
+        # Default values if database doesn't have all states
         default_counts = {
             AnimationState.IDLE: 4,
-            AnimationState.WALKING : 7,
+            AnimationState.WALKING: 7,
             AnimationState.ATTACKING_1: 5,
             AnimationState.ATTACKING_2: 4,
             AnimationState.ATTACKING_3: 4,
@@ -235,13 +313,19 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             AnimationState.HURT: 3,
             AnimationState.DYING: 5,
             AnimationState.DEAD: 1,
-            AnimationState.SPECIAL: 6  # Added for special abilities
-
+            AnimationState.SPECIAL_SKILL: 6,
+            AnimationState.RUNNING: 6,
+            AnimationState.JUMPING: 6,
+            AnimationState.FALLING: 4,
+            AnimationState.RUNNING_ATTACK: 6
         }
-        #use defaults for any missing states
+
+        # Use defaults for any missing states
         for state, count in default_counts.items():
             if state not in frame_counts:
                 frame_counts[state] = count
+            if state not in frame_rates:
+                frame_rates[state] = 0.15  # Default frame rate
 
         return frame_counts
 
@@ -250,27 +334,19 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         return self.frame_counts.get(state, 4) #default to 4 is not found
 
     def handle_input(self, keys, space_pressed):
-        """handle player input""" #should this go inthe view? no,
-        #the view is for checking if something has been pressed
-        # this is the logic behind each keystroke
+        """Handle player input - simplified like special ability"""
         if not self.is_alive:
             return
 
-        #process defending (E key)
-        self.is_defending = keys[pygame.K_e] and not self.is_attacking and not self.using_special
+        # Process defending (E key)
+        self.is_defending = keys[pygame.K_e] and not self.is_attacking
 
-        #Special Ability (Q Key)
-        if keys[pygame.K_q] and self.special_cooldown_remaining <= 0 and not self.is_attacking and not self.is_defending:
-            self.activate_special_ability()
-
-        #only allow movement if not defending, attacking, or using special
-        if not self.is_defending and not self.is_attacking and not self.using_special:
-            #move left with A
+        # Only allow movement if not defending or attacking
+        if not self.is_defending and not self.is_attacking:
             if keys[pygame.K_a]:
                 self.x -= self.speed
                 self.direction = Direction.LEFT
                 self.is_moving = True
-            #move right with D
             elif keys[pygame.K_d]:
                 self.x += self.speed
                 self.direction = Direction.RIGHT
@@ -278,35 +354,9 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
             else:
                 self.is_moving = False
         else:
-            #no movement while defending, attacking, or using special
             self.is_moving = False
 
-        #handle attack input (spacebar for now, could change to mouse)
-        if space_pressed and self.can_input and not self.using_special and(self.attack_complete or self.attack_window >0):
-            self.can_input = False #prevent multiple attacks from one press
-
-            #start or continue attack combo
-            if self.attack_complete or self.attack_window >0:
-                if self.attack_window >0 and self.attack_combo >0:
-                    #continue combo
-                    self.attack_combo +=1
-                    if self.attack_combo >3:
-                        #loop back to the first attack animation
-                        self.attack_combo = 1 #this is hardcoded, change for animaition shits
-
-                else:
-                    #start new combo
-                    self.attack_combo = 1
-
-                self.is_attacking = True
-                self.attack_complete = False
-                self.attack_window = 0 #reset combo window on successful input
-                self.attack_timer = self.attack_duration  # Start the attack duration timer
-                #clear hit targets for new attack
-                self.hit_targets.clear()
-        #reset input flag when spacebar is released
-        if not space_pressed:
-            self.can_input = True
+        # Attack input will be handled in Game.py like special ability
 
     #jump stuff? or possibly the entering/exiting rooms that Zach talked about
 
@@ -314,60 +364,103 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         """update hero state"""
         super().update(dt)
 
-        #update special cooldown
-        if self.special_cooldown_remaining >0:
+        # Update special cooldown
+        if self.special_cooldown_remaining > 0:
             self.special_cooldown_remaining -= dt
             if self.special_cooldown_remaining < 0:
                 self.special_cooldown_remaining = 0
 
-        #update special ability duration
+        # Update special ability duration
         if self.special_duration_remaining > 0:
             self.special_duration_remaining -= dt
             if self.special_duration_remaining <= 0:
                 self.using_special = False
                 self.special_duration_remaining = 0
 
-        #update attack timer
-        if self.attack_timer > 0:
-            self.attack_timer -= dt
-            if self.attack_timer <= 0:
-                self.is_attacking = False
-                self.attack_timer = 0
-                self.attack_complete = True
+        # Update attack cooldown
+        if self.attack_cooldown_remaining > 0:
+            self.attack_cooldown_remaining -= dt
+            if self.attack_cooldown_remaining < 0:
+                self.attack_cooldown_remaining = 0
 
-        #ground check
+            # Update combo timer
+            if self.combo_timer > 0 and not self.is_attacking:
+                self.combo_timer -= dt
+                if self.combo_timer <= 0:
+                    # Combo window expired, reset combo
+                    print(f"Combo expired, resetting from {self.attack_combo} to 0")
+                    self.attack_combo = 0
+                    self.combo_timer = 0
+
+        # Update animation frames for all states
+        self.animation_counter += dt
+
+        # Use the frame rate from the database for current animation
+        current_frame_rate = self.frame_rates.get(self.animation_state, 0.15)
+
+        if self.animation_counter >= current_frame_rate:
+            self.animation_counter = 0
+            frame_count = self.get_frames_count(self.animation_state)
+            old_frame_index = self.frame_index
+            self.frame_index = (self.frame_index + 1) % frame_count
+
+            # Check if attack animation completed (went through all frames)
+            if self.is_attacking and old_frame_index == frame_count - 1 and self.frame_index == 0:
+                print(f"Attack animation complete for combo {self.attack_combo}")
+                self.current_attack_complete = True
+                self.is_attacking = False
+                # Start combo timer when attack ends
+                self.combo_timer = self.combo_window
+
+        # Handle attack end timer
+        if hasattr(self, '_attack_end_timer'):
+            self._attack_end_timer -= dt
+            if self._attack_end_timer <= 0:
+                self.is_attacking = False
+                self.attack_animation_complete = False
+                delattr(self, '_attack_end_timer')
+                # Start combo timer when attack ends
+                self.combo_timer = self.combo_window
+
+        # Ground check
         if self.y >= self.ground_y:
             self.y = self.ground_y
-            self. on_ground = True
+            self.on_ground = True
             self.is_falling = False
             self.y_velocity = 0
 
-        #update animaiton state based on current actions
-        if self.is_alive and not self.animation_state in [AnimationState.HURT, AnimationState.DYING, AnimationState.DEAD]:
+        # Update animation state based on current actions
+        if self.is_alive and not self.animation_state in [AnimationState.HURT, AnimationState.DYING,
+                                                          AnimationState.DEAD]:
             self._update_animation_state()
 
-        # Animation frame update
-        self.animation_counter += self.animation_speed
-        if self.animation_counter >= 1:
-            self.animation_counter = 0
-            self.frame_index = (self.frame_index + 1) % len(self.frames[self.animation_state])
+        # Update current sprite for rendering
+        if self.animation_state in self.frames and len(self.frames[self.animation_state]) > 0:
+            # Ensure frame_index is within bounds
+            max_frame_index = len(self.frames[self.animation_state]) - 1
+            if self.frame_index > max_frame_index:
+                self.frame_index = max_frame_index
+            elif self.frame_index < 0:
+                self.frame_index = 0
 
-        self.current_frame = self.frames[self.animation_state][self.frame_index]
-        self.image = self.current_frame
-        self.rect.topleft = (self.x, self.y)
+            self.current_frame = self.frames[self.animation_state][self.frame_index]
+            self.current_sprite = self.current_frame
+            self.image = self.current_frame
+            self.rect.topleft = (self.x, self.y)
 
     def _update_animation_state(self):
         """update the current animation state based on hero actions"""
-        #store previous state before changing
+        # Store previous state before changing
         self.last_animation_state = self.animation_state
 
         if not self.is_alive:
             return
 
-        #determine new animation state with priority for special abilities, attacks, and defending
+        # Determine new animation state with priority for special abilities, attacks, and defending
         if self.using_special:
             new_state = AnimationState.SPECIAL_SKILL
         elif self.is_attacking:
+            # Map combo number to attack animation
             if self.attack_combo == 1:
                 new_state = AnimationState.ATTACKING_1
             elif self.attack_combo == 2:
@@ -376,6 +469,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
                 new_state = AnimationState.ATTACKING_3
             else:
                 new_state = AnimationState.IDLE
+                print(f"Warning: Invalid attack combo {self.attack_combo}")
         elif self.is_defending:
             new_state = AnimationState.DEFENDING
         elif self.is_falling:
@@ -385,38 +479,35 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         else:
             new_state = AnimationState.IDLE
 
-        #only change state if its different from current
+        # Only change state if it's different from current
         if new_state != self.animation_state:
+            print(f"Changing animation from {self.animation_state.name} to {new_state.name}")
             self.animation_state = new_state
-
-            #only reset frame index if not chaining attacks
-            if not (self.is_attacking and self.last_animation_state in [AnimationState.ATTACKING_1, AnimationState.ATTACKING_2, AnimationState.ATTACKING_3] and
-                    self.animation_state in [AnimationState.ATTACKING_1, AnimationState.ATTACKING_2, AnimationState.ATTACKING_3]):
-                self.frame_index = 0
-                self.animation_counter = 0
+            # Always reset animation when changing states
+            self.frame_index = 0
+            self.animation_counter = 0
 
     def get_attack_hitbox(self):
-        #possibly update this based off of hitbox parameters passed in abstract class
-        #get hitbox for current attack
-        if not self.is_attacking and not self.using_special:
+        """Get the hitbox for the current attack"""
+        if not self.is_attacking:
             return None
 
-        #create attack hitbox based on character direction
+        # Create attack hitbox based on character direction
         width = self.attack_range
         height = 80
 
         if self.direction == Direction.RIGHT:
-            x = self.x + 25
-            y = self.y -height //2
-        else:
-            x = self.x - 25 -width
-            y = self.y - height //2
+            x = self.x + self.width  # Start at the right edge of the character
+            y = self.y + self.height - height  # Bottom of hitbox touches sprite feet
+        else:  # Direction.LEFT
+            x = self.x - width  # Start at the left edge of the character
+            y = self.y + self.height - height  # Bottom of hitbox touches sprite feet
 
         return pygame.Rect(x, y, width, height)
 
     def attack(self, targets):
         """Attempt to attack a list of target entities"""
-        if(not self.is_attacking and not self.using_special) or not self.is_alive:
+        if not self.is_attacking or not self.is_alive:
             return []
 
         hit_targets = []
@@ -424,16 +515,14 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
 
         if attack_hitbox:
             for target in targets:
-                #skip targets already hit by this attack or by those that arent alive
+                # Skip targets already hit by this attack and those that aren't alive
                 if target in self.hit_targets or not target.is_alive:
                     continue
 
-                #check collision with target's hitbox
+                # Check collision with target's hitbox
                 if attack_hitbox.colliderect(target.hitbox):
-                    #calculate damage, might be modified by ability or potion
-                    damage = self.calculate_damage(target)
-                    #hit successful
-                    hit = target.take_damage(damage)
+                    # Hit successful
+                    hit = target.take_damage(self.damage)
                     if hit:
                         self.hit_targets.add(target)
                         hit_targets.append(target)
@@ -464,6 +553,49 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
         self.using_special = True
         self.special_cooldown_remaining = self.special_cooldown
         self.special_duration_remaining = self.special_duration  # Start the duration timer
+
+    def activate_attack(self):
+        """Activate basic attack - simple like special ability"""
+        print(
+            f"\nactivate_attack called - combo: {self.attack_combo}, is_attacking: {self.is_attacking}, cooldown: {self.attack_cooldown_remaining:.2f}")
+
+        # Check basic conditions
+        if not self.is_alive or self.attack_cooldown_remaining > 0:
+            print(f"  Blocked: alive={self.is_alive}, cooldown={self.attack_cooldown_remaining:.2f}")
+            return False
+
+        # Don't allow new attack if current one is still playing
+        if self.is_attacking:
+            print(f"  Already attacking, ignoring")
+            return False
+
+        # Set attack state
+        self.is_attacking = True
+        self.attack_cooldown_remaining = self.attack_cooldown
+        self.current_attack_complete = False
+
+        # Handle combo progression
+        if self.combo_timer > 0 and self.attack_combo > 0 and self.attack_combo < 3:
+            # Continue combo
+            self.attack_combo += 1
+            print(f"  Continuing combo to {self.attack_combo}")
+        else:
+            # Start new combo
+            self.attack_combo = 1
+            print(f"  Starting new combo at 1")
+
+        # Clear hit targets for new attack
+        self.hit_targets.clear()
+
+        # Force animation state update immediately
+        self._update_animation_state()
+
+        # Reset frame index for new attack animation
+        self.frame_index = 0
+        self.animation_counter = 0
+
+        print(f"  Attack activated! Combo: {self.attack_combo}")
+        return True
 
     def take_damage(self, damage):
         """Take damage, return True if hit, False if not"""
@@ -520,7 +652,7 @@ class Hero(DungeonCharacter, pygame.sprite.Sprite):
 
     def get_current_sprite(self):
         """Get current sprite surface"""
-        return getattr(self, 'current_sprite', None)
+        return getattr(self, 'current_frame', None)
 
     def set_current_sprite(self, sprite):
         """Set current sprite surface"""

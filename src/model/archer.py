@@ -13,38 +13,42 @@ class Archer(Hero):
         self.__arrow_damage = self.get_damage()  # Base damage for arrows
         self.__projectile_manager = None  # Will be set by the game
         self.__arrow_fired = False  # Track if arrow was fired in current attack
+        self.previous_space_pressed = False  # Ensure input edge detection is initialized
 
     def get_attack_hitbox(self):
         """Override to provide different attack hitbox for archer"""
-        if not self.is_attacking() and not self.is_using_special():
+        if not self.is_attacking and not self.using_special:
             return None
 
-        # Archer has longer, narrower hitbox
-        width = self.get_attack_range() * 2  # Longer range
-        height = 40  # Narrower
+        # Archer hitbox matches sprite width (128)
+        width = 128
+        height = 40  # Keep height as before, or adjust if needed
 
         if self.get_direction() == Direction.RIGHT:
-            x = self.get_x() + 25  # Offset from character center
-            y = self.get_y() - height // 2 + 10  # Adjusted to match animation
+            x = self.get_x() + self.width  # Start at the right edge of the character
+            y = self.get_y() + self.height - height  # Bottom of hitbox touches sprite feet
         else:  # Direction.LEFT
-            x = self.get_x() - 25 - width  # Offset from character center
-            y = self.get_y() - height // 2 + 10  # Adjusted to match animation
+            x = self.get_x() - width  # Start at the left edge of the character
+            y = self.get_y() + self.height - height  # Bottom of hitbox touches sprite feet
 
         return pygame.Rect(x, y, width, height)
 
     def attack(self, targets):
         """Override attack to fire arrows"""
-        if not self.is_attacking() or not self.is_alive():
+        if not self.is_attacking or not self.is_alive:
             return []
 
         # Track if we hit any targets
         hit_targets = []
 
         # Calculate arrow starting position
+        # Calculate arrow starting position at the center of the archer
         if self.get_direction() == Direction.RIGHT:
-            start_x = self.get_x() + 40
+            start_x = self.get_x() + self.width // 2  # Center horizontally
         else:
-            start_x = self.get_x() - 10
+            start_x = self.get_x() + self.width // 2  # Center horizontally
+
+        start_y = self.get_y() + self.height // 2  # Center vertically
 
         start_y = self.get_y() + 20  # Adjust to match animation
 
@@ -116,15 +120,15 @@ class Archer(Hero):
             # Calculate angle offset from center
             angle_offset = -spread_angle / 2 + i * angle_step
 
-            # Calculate starting position
+            # Calculate starting position at archer center
             if self.get_direction() == Direction.RIGHT:
-                start_x = self.get_x() + 40
+                start_x = self.get_x() + self.width // 2
                 angle = 0 + angle_offset  # 0 degrees = right
             else:
-                start_x = self.get_x() - 10
+                start_x = self.get_x() + self.width // 2
                 angle = 180 + angle_offset  # 180 degrees = left
 
-            start_y = self.get_y() + 10
+            start_y = self.get_y() + self.height // 2
 
             # Create arrow with angle
             arrow = Projectile(

@@ -1,5 +1,5 @@
-####Connor Willis ####
-#entry point, single room testing for now
+####Connor Willis, Jayda Minks, Mohammad Farrah ####
+#entry point
 import pygame
 import sys
 import os
@@ -13,12 +13,12 @@ from src.view.Menu import Menu #-- Jayda -- for Menu class
 from src.model.tiles import *
 
 
-
 def main():
     """Main entry point for video game"""
 
     #iniitialiize pygame
     pygame.init()
+
 
     #initialize db if doesnt exist
     if not os.path.exists('game_data.db'):
@@ -35,6 +35,7 @@ def main():
     #set up display
     SCREEN_WIDTH = 800
     SCREEN_HEIGHT = 600
+
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('Dungeon Adventure')
 
@@ -42,15 +43,14 @@ def main():
     menu = Menu(screen, SCREEN_WIDTH, SCREEN_HEIGHT)
     menu.start_game(Game)
 
-    print("Starting game...")
-    print("Controls: ")
-    print("- A/D: Move left/right")
-    print("- SPACE: Attack")
-    print("- Q: Special ability")
-    print("- E: Defend")
-    print("- 1/2/3: Switch heroes")
-    print("- ESC: Pause")
-    print("- F11: Toggle fullscreen (or use maximize button)")
+    # print("Starting game...")
+    # print("Controls: ")
+    # print("- A/D: Move left/right")
+    # print("- Q: Basic attack (special ability)")
+    # print("- E: Defend")
+    # print("- 1/2/3: Switch heroes")
+    # print("- ESC: Pause")
+    # print("- F11: Toggle fullscreen (or use maximize button)")
 
     #create and run the game
     #game = Game(screen, SCREEN_WIDTH, SCREEN_HEIGHT)

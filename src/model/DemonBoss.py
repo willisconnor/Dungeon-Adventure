@@ -1,5 +1,7 @@
 from src.model.DungeonEntity import Direction, AnimationState
 import pygame
+import sqlite3
+from src.utils.SpriteSheet import SpriteSheet
 
 
 class DemonBoss(pygame.sprite.Sprite,):
@@ -59,6 +61,8 @@ class DemonBoss(pygame.sprite.Sprite,):
         self.__enrage_threshold = 0.3  # Enrages at 30% health
         self.__attack_pattern = 0  # Tracks attack pattern phase
         self.__cleave_damage_multiplier = 1.5  # Special cleave attack deals more damage
+
+        self._load_all_frames()
 
     def update(self, dt):
         """Update boss state"""
@@ -469,3 +473,65 @@ class DemonBoss(pygame.sprite.Sprite,):
     @frame_index.setter
     def frame_index(self, value):
         self.__frame_index = value
+
+    def _load_all_frames(self):
+        """Load all frames for each animation state from monster_animations table"""
+        conn = sqlite3.connect('game_data.db')
+        c = conn.cursor()
+        c.execute('''
+            SELECT animation_state, sprite_path, frame_count, frame_rate, frame_width, frame_height
+            FROM monster_animations
+            WHERE monster_type = ?
+        ''', (self.__enemy_type,))
+        animation_data = c.fetchall()
+        conn.close()
+
+        # Convert to dict: {AnimationState: data}
+        animation_map = {}
+        for row in animation_data:
+            state = AnimationState[row[0]]
+            animation_map[state] = {
+                'path': row[1],
+                'frame_count': row[2],
+                'frame_rate': row[3],
+                'frame_width': row[4],
+                'frame_height': row[5]
+            }
+
+        frames = {}
+        for state, data in animation_map.items():
+            try:
+                sheet_image = pygame.image.load(data['path']).convert_alpha()
+                spritesheet = SpriteSheet(sheet_image)
+                frame_count = data['frame_count']
+                frame_width = data['frame_width']
+                frame_height = data['frame_height']
+                state_frames = []
+                for i in range(frame_count):
+                    frame = spritesheet.get_frame(i, frame_width, frame_height, scale=1.0)
+                    state_frames.append(frame)
+                frames[state] = state_frames
+            except Exception as e:
+                print(f"Error loading boss animation {state.name}: {e}")
+                # Fallback: red box
+                surf = pygame.Surface((294, 160), pygame.SRCALPHA)
+                surf.fill((200, 50, 50))
+                frames[state] = [surf]
+        self.frames = frames
+
+    def get_current_sprite(self):
+        """Get current animation frame surface"""
+        state = self.__animation_state
+        frame_idx = self.__frame_index
+        if hasattr(self, 'frames') and state in self.frames:
+            frames = self.frames[state]
+            if frame_idx < len(frames):
+                return frames[frame_idx]
+            return frames[0]
+        return self.image
+
+    def draw(self, surface, camera_x=0, camera_y=0):
+        sprite = self.get_current_sprite()
+        draw_x = self.__x - camera_x
+        draw_y = self.__y - camera_y
+        surface.blit(sprite, (draw_x, draw_y))
