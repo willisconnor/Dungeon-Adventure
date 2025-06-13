@@ -745,6 +745,19 @@ class DungeonManager:
         # generate dungeon
         self.__generate_dungeon()
 
+        self.rooms = {}  # keys are (x, y) tuples, values are Room instances
+        self.current_room = None
+
+    def add_room(self, room: Room):
+            self.rooms[room.grid_pos] = room
+
+    def set_current_room_by_coordinates(self, x: int, y: int):
+        room = self.rooms.get((x, y))
+        if room:
+            self.current_room = room
+        else:
+            raise ValueError(f"No room found at coordinates ({x}, {y})")
+
     def __load_tileset(self, tileset_path: str) -> pygame.Surface:
         """
         Load tileset image
@@ -1118,6 +1131,13 @@ class DungeonManager:
     def get_current_room_position(self) -> Tuple[int, int]:
         """Get current room grid position"""
         return self.__current_room_pos
+
+    def set_current_room_by_coordinates(self, x, y):
+        key = (x, y)
+        if key in self.rooms:
+            self.current_room = self.rooms[key]
+        else:
+            raise ValueError(f"No room found at coordinates {x}, {y}")
 
     def get_previous_room_position(self) -> Optional[Tuple[int, int]]:
         """Get previous room grid position"""

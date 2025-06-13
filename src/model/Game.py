@@ -16,11 +16,12 @@ from src.model.DungeonEntity import Direction, AnimationState
 from src.model.RoomDungeonSystem import DungeonManager, Room, Direction, DungeonTemplate
 from src.utils.RoomTransitionManager import RoomTransitionManager, DoorInteractionManager, TransitionType
 import random
-from src.view.Menu import GameResultMenu
+from src.view.Menu import GameResultMenu, Button
 from src.view.DungeonMinimap import DungeonMinimap, MinimapIntegration, RoomDisplayType
 from src.utils.DungeonConfig import DungeonConfig
 from src.view.BackgroundManager import BackgroundManager
 from src.view.TileRenderer import TileRenderer
+from saves.SaveLoadManager import SaveLoadSystem
 
 
 class HeroType(Enum):
@@ -40,6 +41,7 @@ class GameState(Enum):
 
 class Game:
     """Main game class that manages all game systems"""
+    saveloadmanager = SaveLoadSystem("saves", "save_data")
 
     def __init__(self, screen, width, height):
         # Public attributes needed by other components
@@ -96,6 +98,12 @@ class Game:
         self._dungeon_manager = None
         self._current_room = None
 
+        # Add play time tracking + pause buttons
+        self._play_time = 0.0
+        self._play_time_start = None
+        self._pause_buttons = []
+        self._setup_pause_buttons()
+
         # Private UI elements
         self._font = pygame.font.Font(None, 36)
         self._ui_font = pygame.font.Font(None, 24)
@@ -114,6 +122,9 @@ class Game:
 
         #bg manager
         self._background_manager = BackgroundManager("assets/environment/background.png")
+        #Pause menu buttons
+        self.pause_buttons = []
+        self._setup_pause_buttons()
 
         # Load assets
         # self._tileset = self._load_tileset()
@@ -268,14 +279,14 @@ class Game:
         if event.type == pygame.QUIT:
             self.running = False
             return
-
         if event.type == pygame.KEYDOWN:
             if self.state == GameState.HERO_SELECT:
                 self._handle_hero_select_input(event.key)
             elif self.state == GameState.PLAYING:
                 self._handle_playing_input(event.key)
             elif self.state == GameState.PAUSED:
-                self._handle_paused_input(event.key)
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    self._handle_paused_mouse_input(event.pos)
             elif self.state in (GameState.GAME_OVER, GameState.VICTORY):
                 self._handle_end_state_input(event.key)
         elif event.type == pygame.KEYUP:
@@ -324,14 +335,19 @@ class Game:
 
     def _handle_paused_input(self, key):
         """Handle input while game is paused"""
-        if key == pygame.K_ESCAPE:
-            self.set_game_state(GameState.PLAYING)
-        elif key == pygame.K_q:
-            self.running = False
-        elif key == pygame.K_F11:
-            self._toggle_fullscreen()
-        elif key == pygame.K_m:
-            self.__minimap_integration.toggle_visibility()
+        for button in self.pause_buttons:
+            if button.check_for_input(key):
+                if button.action == "resume":
+                    self.set_game_state(GameState.PLAYING)
+
+                elif button.action == "save":
+                    if self.save_game():
+                        print("Game saved successfully!")
+                    else:
+                        print("Failed to save game!")
+
+                elif button.action == "quit":
+                    self.running = False
 
     def _handle_end_state_input(self, key):
         """Handle input in end game states"""
@@ -650,6 +666,9 @@ class Game:
         self.running = True
         result = "exit"  # Default return value
 
+        # Start play time tracking
+        self._play_time_start = pygame.time.get_ticks() / 1000.0
+
         while self.running:
             # Check if we should return to main menu
             if self.state == GameState.MENU:
@@ -660,9 +679,11 @@ class Game:
 
             # calc delta time
             dt = self._clock.tick(60) / 1000.0  # 60 fps, dt in seconds
+            game_state = self.saveloadmanager.load_game()
 
             # handle events
             for event in pygame.event.get():
+
                 if event.type == pygame.QUIT:
                     self.running = False
                     result = "exit"
@@ -673,7 +694,9 @@ class Game:
                             self.state = GameState.PAUSED
                         elif self.state == GameState.PAUSED:
                             self.state = GameState.PLAYING
-                    # Add more key handlers as needed
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.state == GameState.PAUSED:
+                        self._handle_paused_mouse_input(event.pos)
                 else:
                     self.handle_event(event)
 
@@ -681,9 +704,14 @@ class Game:
 
             # update game state
             if self.state == GameState.PLAYING:
+                self._update_play_time()
                 keys = pygame.key.get_pressed()
                 self.update(dt, keys)
-
+            elif self.state == GameState.PAUSED:
+                # Pause play time tracking
+                if self._play_time_start is not None:
+                    self._update_play_time()
+                    self._play_time_start = None
             # draw it all
             self.draw()
 
@@ -884,8 +912,7 @@ class Game:
         if not self._current_room:
             return
 
-        # Draw pillars if present (example from your original room system)
-        # You'd need to adapt this to your pillar system
+        # Draw pillars if present (example from original room system)
         pass
 
     def _draw_hero_select(self):
@@ -1172,21 +1199,13 @@ class Game:
         self.__minimap_integration.draw_with_ui(self.screen)
 
     def _draw_pause_overlay(self):
-        """Draw pause screen overlay"""
-        # Semi-transparent overlay
-        overlay = pygame.Surface((self.width, self.height))
-        overlay.set_alpha(128)
-        overlay.fill((0, 0, 0))
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))  # Semi-transparent black overlay
         self.screen.blit(overlay, (0, 0))
 
-        # Pause text
-        pause_text = self._font.render("PAUSED", True, (255, 255, 255))
-        pause_rect = pause_text.get_rect(center=(self.width // 2, self.height // 2))
-        self.screen.blit(pause_text, pause_rect)
+        for button in self.pause_buttons:
+            button.update(self.screen)
 
-        resume_text = self._ui_font.render("Press ESC to Resume", True, (200, 200, 200))
-        resume_rect = resume_text.get_rect(center=(self.width // 2, self.height // 2 + 50))
-        self.screen.blit(resume_text, resume_rect)
 
     def _draw_victory(self):
         from src.view.Menu import GameResultMenu
@@ -1298,3 +1317,127 @@ class Game:
     def set_dungeon_template(self, template: DungeonTemplate):
         """Set the dungeon template for next game"""
         self._dungeon_template = template
+
+    def save_game(self, filename="autosave") -> bool:
+        """Save current game state to file."""
+        try:
+            if not self._active_hero or not self._dungeon_manager:
+                print("Cannot save: No active hero or dungeon.")
+                return False
+
+            game_state = {
+                'hero_type': self._selected_hero_type.name,
+                'hero_position': (self._active_hero.x, self._active_hero.y),
+                'hero_health': self._active_hero.health,
+                'current_room': self._dungeon_manager.get_current_room_position(),  # ✅ USE THIS ONE
+                'dungeon_template': self._dungeon_template.name,
+                'play_time': self._play_time,
+            }
+
+            return self.saveloadmanager.save_game(game_state, filename)
+
+        except Exception as e:
+            print(f"Failed to save game: {e}")
+            return False
+
+    def load_game(self, filename="autosave") -> bool:
+        """Load game state from file."""
+        try:
+            game_state = self.saveloadmanager.load_game_state(filename)
+            if not game_state:
+                print("Failed to load or corrupted save file.")
+                return False
+
+            # Extract data
+            hero_type = HeroType[game_state['hero_type']]
+            hero_pos = game_state['hero_position']
+            hero_health = game_state['hero_health']
+            room_coords = game_state['current_room']
+            dungeon_template = DungeonTemplate[game_state['dungeon_template']]
+            self._play_time = game_state.get('play_time', 0)
+
+            # Rebuild game with saved data
+            self._selected_hero_type = hero_type
+            self._dungeon_template = dungeon_template
+            self._initialize_game()
+
+            self._active_hero.x, self._active_hero.y = hero_pos
+            self._active_hero.health = hero_health
+            self._dungeon_manager.set_current_room_by_coordinates(*room_coords)
+            self.__minimap_integration.sync_with_dungeon_manager(self._dungeon_manager)
+
+            return True
+
+        except Exception as e:
+            print(f"Failed to load game: {e}")
+            return False
+
+    def has_save_file(self) -> bool:
+        """Check if a save file exists"""
+        return self.saveloadmanager.save_exists()
+
+    def get_save_info(self) -> dict:
+        """Get information about the save file"""
+        return self.saveloadmanager.get_save_info()
+
+    def _update_play_time(self):
+        """Update the total play time"""
+        if self._play_time_start is None:
+            self._play_time_start = pygame.time.get_ticks() / 1000.0
+
+        current_time = pygame.time.get_ticks() / 1000.0
+        session_time = current_time - self._play_time_start
+        self._play_time += session_time
+        self._play_time_start = current_time
+
+    def _setup_pause_buttons(self):
+        """Setup clickable buttons for pause menu."""
+        font = pygame.font.Font(None, 50)
+        button_y = self.height // 2
+        spacing = 80
+        center_x = self.width // 2
+
+        self.pause_buttons = [
+            Button(None, (center_x, button_y), "RESUME", font, (255, 255, 255), (255, 200, 100), "resume"),
+            Button(None, (center_x, button_y + spacing), "SAVE GAME", font, (255, 255, 255), (255, 200, 100), "save"),
+            Button(None, (center_x, button_y + 2 * spacing), "QUIT", font, (255, 255, 255), (255, 200, 100), "quit"),
+        ]
+
+    def _handle_paused_mouse_input(self, position):
+        for button in self.pause_buttons:
+            if button.check_for_input(position):
+                print(f"Clicked button: {button.action}")  # Debug
+                if button.action == "resume":
+                    self.set_game_state(GameState.PLAYING)
+                elif button.action == "save":
+                    if self.save_game():
+                        print("Game saved successfully!")
+                    else:
+                        print("Failed to save game!")
+                elif button.action == "quit":
+                    self.running = False
+
+    def load_game_state(self, game_state: dict) -> bool:
+        try:
+            # Load hero type, position, health, room coords, etc.
+            self._selected_hero_type = HeroType[game_state['hero_type']]
+            self._dungeon_template = DungeonTemplate[game_state['dungeon_template']]
+
+            # Initialize game/dungeon (build rooms here)
+            self._initialize_game()
+
+            # Set hero position and health
+            self._active_hero.x, self._active_hero.y = game_state['hero_position']
+            self._active_hero.health = game_state['hero_health']
+
+            # set current room by saved coordinates (should exist now)
+            self._dungeon_manager.set_current_room_by_coordinates(*game_state['current_room'])
+
+            # Sync UI components like minimap
+            self.__minimap_integration.sync_with_dungeon_manager(self._dungeon_manager)
+
+            return True
+
+        except Exception as e:
+            print(f"Failed to load game state: {e}")
+            return False

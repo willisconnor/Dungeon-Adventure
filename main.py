@@ -13,12 +13,13 @@ from src.view.Menu import Menu #-- Jayda -- for Menu class
 from src.model.tiles import *
 
 
-
 def main():
     """Main entry point for video game"""
 
     #iniitialiize pygame
     pygame.init()
+
+
     #initialize db if doesnt exist
     if not os.path.exists('game_data.db'):
         print("Initializing database...")
