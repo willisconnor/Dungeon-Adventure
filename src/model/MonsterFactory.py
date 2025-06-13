@@ -12,7 +12,7 @@ from src.model.DemonBoss import DemonBoss
 
 class MonsterType(Enum):
     """Enumeration of available monster types"""
-    GOBLIN = "goblin"
+    GORGON = "gorgon"
     SKELETON = "skeleton"
     OGRE = "ogre"
     DEMON_BOSS = "demon_boss"
@@ -38,7 +38,7 @@ class DungeonMonsterFactory(MonsterFactory):
     def __init__(self):
         """Initialize the factory with supported monster types"""
         self._supported_types = [
-            MonsterType.GOBLIN,
+            MonsterType.GORGON,
             MonsterType.SKELETON,
             MonsterType.OGRE,
             MonsterType.DEMON_BOSS
@@ -64,8 +64,8 @@ class DungeonMonsterFactory(MonsterFactory):
                              f"Supported types: {[t.value for t in self._supported_types]}")
 
         # Use your existing classes exactly as they are
-        if monster_type == MonsterType.GOBLIN:
-            return self._create_goblin()
+        if monster_type == MonsterType.GORGON:
+            return self._create_gorgon()
         elif monster_type == MonsterType.SKELETON:
             return self._create_skeleton()
         elif monster_type == MonsterType.OGRE:
@@ -76,7 +76,7 @@ class DungeonMonsterFactory(MonsterFactory):
         # This should never be reached due to the validation above
         raise ValueError(f"Factory method not implemented for {monster_type}")
 
-    def _create_goblin(self) -> Goblin:
+    def _create_gorgon(self) -> Goblin:
         """Create a Goblin using  Goblin class"""
         return Goblin()
 

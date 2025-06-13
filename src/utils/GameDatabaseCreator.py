@@ -107,7 +107,7 @@ def insert_hero_stats(conn):
 def insert_monster_stats(conn):
     try:
         monsters = [
-            ('goblin', 50, 50, 1, 8, 60, 1.5, 5, 0.05, 1.2, 10, 5),
+            ('gorgon', 50, 50, 1, 8, 60, 1.5, 5, 0.05, 1.2, 10, 5),
             ('orc', 80, 80, 1, 12, 70, 1.2, 8, 0.08, 1.3, 20, 10),
             ('skeleton', 60, 60, 1, 10, 65, 1.3, 3, 0.06, 1.4, 15, 8),
             ('demon_boss', 500, 500, 0, 25, 120, 0.8, 15, 0.12, 1.6, 100, 50)
@@ -180,10 +180,10 @@ def insert_monster_animations(conn):
         
         animations = [
             # Goblin animations
-            ('goblin', 'idle', f'{base_path}/goblin/Goblin_Idle.png', 4, 0.15, 48, 48),
-            ('goblin', 'walking', f'{base_path}/goblin/Goblin_Walk.png', 6, 0.12, 48, 48),
-            ('goblin', 'attacking', f'{base_path}/goblin/Goblin_Attack.png', 4, 0.1, 48, 48),
-            ('goblin', 'hurt', f'{base_path}/goblin/Goblin_Hurt.png', 2, 0.3, 48, 48),
+            ('gorgon', 'idle', f'{base_path}/Gorgon_1/Idle.png', 4, 0.15, 48, 48),
+            ('gorgon', 'walking', f'{base_path}/Gorgon_1/Walk.png', 6, 0.12, 48, 48),
+            ('gorgon', 'attacking', f'{base_path}/Gorgon_1/Attack.png', 4, 0.1, 48, 48),
+            ('gorgon', 'hurt', f'{base_path}/Gorgon_1/Hurt.png', 2, 0.3, 48, 48),
             
             # Orc animations
             ('orc', 'idle', f'{base_path}/orc/Orc_Idle.png', 4, 0.15, 64, 64),

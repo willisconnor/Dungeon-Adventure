@@ -1,5 +1,5 @@
 ####Connor Willis, Jayda Minks, Mohammad Farrah ####
-#entry point, single room testing for now
+#entry point
 import pygame
 import sys
 import os
@@ -42,14 +42,14 @@ def main():
     menu = Menu(screen, SCREEN_WIDTH, SCREEN_HEIGHT)
     menu.start_game(Game)
 
-    print("Starting game...")
-    print("Controls: ")
-    print("- A/D: Move left/right")
-    print("- Q: Basic attack (special ability)")
-    print("- E: Defend")
-    print("- 1/2/3: Switch heroes")
-    print("- ESC: Pause")
-    print("- F11: Toggle fullscreen (or use maximize button)")
+    # print("Starting game...")
+    # print("Controls: ")
+    # print("- A/D: Move left/right")
+    # print("- Q: Basic attack (special ability)")
+    # print("- E: Defend")
+    # print("- 1/2/3: Switch heroes")
+    # print("- ESC: Pause")
+    # print("- F11: Toggle fullscreen (or use maximize button)")
 
     #create and run the game
     #game = Game(screen, SCREEN_WIDTH, SCREEN_HEIGHT)

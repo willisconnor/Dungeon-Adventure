@@ -18,14 +18,14 @@ class TestMonsterFactory(unittest.TestCase):
         supported_types = self.factory.get_supported_types()
         
         # Check that all expected types are supported
-        self.assertIn(MonsterType.GOBLIN, supported_types)
+        self.assertIn(MonsterType.GORGON, supported_types)
         self.assertIn(MonsterType.OGRE, supported_types)
         self.assertIn(MonsterType.SKELETON, supported_types)
         self.assertIn(MonsterType.DEMON_BOSS, supported_types)
 
     def test_create_goblin(self):
         """Test creation of Goblin monster"""
-        goblin = self.factory.create_monster(MonsterType.GOBLIN)
+        goblin = self.factory.create_monster(MonsterType.GORGON)
         
         # Check type
         self.assertIsInstance(goblin, Goblin)
@@ -71,7 +71,7 @@ class TestMonsterFactory(unittest.TestCase):
     def test_create_monster_with_custom_stats(self):
         """Test creation of monster with custom stats"""
         custom_health = 150
-        goblin = self.factory.create_monster(MonsterType.GOBLIN, custom_health=custom_health)
+        goblin = self.factory.create_monster(MonsterType.GORGON, custom_health=custom_health)
         
         # Check custom health was applied
         self.assertEqual(goblin.get_health(), custom_health)
