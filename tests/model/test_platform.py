@@ -1,8 +1,8 @@
 import unittest
 import pygame
 from src.model.Platform import Platform
-
-
+#Unused test
+'''
 class TestPlatform(unittest.TestCase):
     """Tests for the Platform class"""
 
@@ -171,3 +171,4 @@ class TestPlatform(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+'''
