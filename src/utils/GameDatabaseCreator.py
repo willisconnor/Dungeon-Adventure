@@ -182,7 +182,7 @@ def insert_monster_animations(conn):
             # Goblin animations
             ('gorgon', 'idle', f'{base_path}/Gorgon_1/Idle.png', 4, 0.15, 48, 48),
             ('gorgon', 'walking', f'{base_path}/Gorgon_1/Walk.png', 6, 0.12, 48, 48),
-            ('gorgon', 'attacking', f'{base_path}/Gorgon_1/Attack.png', 4, 0.1, 48, 48),
+            ('gorgon', 'attacking', f'{base_path}/Gorgon_1/Attack_1.png', 4, 0.1, 48, 48),
             ('gorgon', 'hurt', f'{base_path}/Gorgon_1/Hurt.png', 2, 0.3, 48, 48),
             
             # Orc animations
@@ -192,10 +192,10 @@ def insert_monster_animations(conn):
             ('orc', 'hurt', f'{base_path}/orc/Orc_Hurt.png', 2, 0.3, 64, 64),
             
             # Skeleton animations
-            ('skeleton', 'idle', f'{base_path}/skeleton/Skeleton_Idle.png', 4, 0.15, 48, 48),
-            ('skeleton', 'walking', f'{base_path}/skeleton/Skeleton_Walk.png', 6, 0.12, 48, 48),
-            ('skeleton', 'attacking', f'{base_path}/skeleton/Skeleton_Attack.png', 4, 0.1, 48, 48),
-            ('skeleton', 'hurt', f'{base_path}/skeleton/Skeleton_Hurt.png', 2, 0.3, 48, 48),
+            ('skeleton', 'idle', f'{base_path}/Skeleton_Warrior/Idle.png', 4, 0.15, 48, 48),
+            ('skeleton', 'walking', f'{base_path}/Skeleton_Warrior/Walk.png', 6, 0.12, 48, 48),
+            ('skeleton', 'attacking', f'{base_path}/Skeleton_Warrior/Attack_1.png', 4, 0.1, 48, 48),
+            ('skeleton', 'hurt', f'{base_path}/Skeleton_Warrior/Hurt.png', 2, 0.3, 48, 48),
             
             # Demon Boss animations
             ('demon_boss', 'idle', f'{base_path}/demon_boss/Demon_Idle.png', 4, 0.2, 128, 128),
@@ -218,6 +218,56 @@ def insert_monster_animations(conn):
     except Error as e:
         print(e)
 
+
+def update_monster_stats_table(conn):
+    """Add new columns to existing monster_stats table"""
+    try:
+        c = conn.cursor()
+
+        # Add movement_speed column if it doesn't exist
+        try:
+            c.execute('ALTER TABLE monster_stats ADD COLUMN movement_speed REAL DEFAULT 30.0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add attack_cooldown column if it doesn't exist
+        try:
+            c.execute('ALTER TABLE monster_stats ADD COLUMN attack_cooldown REAL DEFAULT 1.5')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        conn.commit()
+        print('monster_stats table updated with new columns')
+    except Error as e:
+        print(e)
+
+
+def update_monster_stats_data(conn):
+    """Update monster stats with movement and attack data"""
+    try:
+        monster_updates = [
+            # (monster_type, movement_speed, attack_cooldown)
+            ('gorgon', 20.0, 1.8),
+            ('orc', 22.0, 1.6),
+            ('skeleton', 25.0, 1.5),
+            ('demon_boss', 20.0, 1.0)
+        ]
+
+        c = conn.cursor()
+        for monster_type, movement_speed, attack_cooldown in monster_updates:
+            c.execute('''
+                      UPDATE monster_stats
+                      SET movement_speed  = ?,
+                          attack_cooldown = ?
+                      WHERE monster_type = ?
+                      ''', (movement_speed, attack_cooldown, monster_type))
+
+        conn.commit()
+        print('monster_stats data updated')
+    except Error as e:
+        print(e)
+
+
 def create_game_database():
     db_file = 'game_data.db'
     conn = create_connection(db_file)
@@ -226,10 +276,16 @@ def create_game_database():
         create_monster_stats_table(conn)
         create_hero_animations_table(conn)
         create_monster_animations_table(conn)
+
         insert_hero_stats(conn)
         insert_monster_stats(conn)
         insert_hero_animations(conn)
-        insert_monster_animations(conn)
+
+        # UPDATE existing monster data with enhanced functionality
+        update_monster_stats_table(conn)  # Add new columns
+        insert_monster_animations(conn)  # Update with proper animation states
+        update_monster_stats_data(conn)  # Update movement speeds
+
         print('Game database created successfully!')
         conn.close()
     else:

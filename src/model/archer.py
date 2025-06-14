@@ -14,6 +14,8 @@ class Archer(Hero):
         self.__projectile_manager = None  # Will be set by the game
         self.__arrow_fired = False  # Track if arrow was fired in current attack
         self.previous_space_pressed = False  # Ensure input edge detection is initialized
+        self._facing_right = True
+        self._mirrored_sprites = {}
 
     def get_attack_hitbox(self):
         """Override to provide different attack hitbox for archer"""
@@ -157,6 +159,19 @@ class Archer(Hero):
                 f" | Projectile Speed: {self.__projectile_speed}"
         )
         return base_str + archer_specific
+
+    def get_current_sprite(self):
+        """Get sprite, flipped if facing left"""
+        base_sprite = super().get_current_sprite()  # Get normal sprite
+
+        if base_sprite and not self._facing_right:
+            sprite_id = id(base_sprite)
+            if sprite_id not in self._mirrored_sprites:
+                # Create and cache flipped sprite
+                self._mirrored_sprites[sprite_id] = pygame.transform.flip(base_sprite, True, False)
+            return self._mirrored_sprites[sprite_id]
+
+        return base_sprite
 
     # Getters and setters for encapsulation
     def get_projectile_speed(self):

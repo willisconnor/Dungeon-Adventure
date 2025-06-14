@@ -718,6 +718,11 @@ class Room:
         for door in self.__doors.values():
             door.draw(surface, camera_offset)
 
+    def mark_boss_defeated(self):
+        '''Mark this room as having defeated boss'''
+        if self.is_boss_room():
+            self.boss_defeated = True
+
 
 class DungeonManager:
     """manages the entire dungeon layout an dprogression"""
@@ -741,6 +746,9 @@ class DungeonManager:
         # Initialize potion manager
         self.__potion_manager = PotionManager()
 
+        #initialize enemy spawn manager
+        self.__enemy_spawn_manager = EnemySpawnManager()
+
         self.pillars_collected = 0
         self.boss_defeated = False
 
@@ -756,12 +764,6 @@ class DungeonManager:
     def add_room(self, room: Room):
             self.rooms[room.grid_pos] = room
 
-    def set_current_room_by_coordinates(self, x: int, y: int):
-        room = self.rooms.get((x, y))
-        if room:
-            self.current_room = room
-        else:
-            raise ValueError(f"No room found at coordinates ({x}, {y})")
 
     def __load_tileset(self, tileset_path: str) -> pygame.Surface:
         """
@@ -791,6 +793,11 @@ class DungeonManager:
     def potion_manager(self) -> PotionManager:
         """Get the potion manager"""
         return self.__potion_manager
+
+    @property
+    def enemy_spawn_manager(self) -> EnemySpawnManager:
+        """get the enemy spawn manager"""
+        return self.__enemy_spawn_manager
 
     def check_pillar_collection(self, player_x: int, player_y: int, player_width: int = 32, player_height: int = 32) -> \
     Optional[Pillar]:
@@ -1076,6 +1083,68 @@ class DungeonManager:
         room.generate_background()
         room.generate_floor(self.__floor_renderer, self.__tileset)
 
+        # Initialize enemy spawns for this room
+        self.__enemy_spawn_manager.initialize_room_spawns(
+            room.grid_pos,
+            room.width,
+            room.height,
+            room.floor_y,
+            room.is_boss_room(),
+            room.is_start_room()
+        )
+
+
+
+    def _constrain_enemy_to_ground(self, enemy: Monster, ground_y: int):
+        """Constrain enemy to move only on the ground along X axis"""
+        # Set enemy Y position to ground level
+        enemy_height = getattr(enemy, 'height', 32)  # Default height if not available
+        enemy.y = ground_y - enemy_height
+
+        # If your Monster class has movement constraints, set them here
+        if hasattr(enemy, 'constrain_to_ground'):
+            enemy.constrain_to_ground(True)
+
+        # If your Monster class has gravity or Y velocity, disable it
+        if hasattr(enemy, 'gravity_enabled'):
+            enemy.gravity_enabled = False
+        if hasattr(enemy, 'velocity_y'):
+            enemy.velocity_y = 0
+
+    def update_enemies_ground_constraint(self, enemies: List[Monster]):
+        """Update enemies to maintain ground constraint"""
+        current_room = self.get_current_room()
+        if not current_room:
+            return
+
+        ground_y = current_room.floor_y
+
+        for enemy in enemies:
+            enemy_height = getattr(enemy, 'height', 32)
+            target_y = ground_y - enemy_height
+
+            # Force enemy to stay at ground level
+            if hasattr(enemy, 'y'):
+                enemy.y = target_y
+            if hasattr(enemy, 'rect'):
+                enemy.rect.y = target_y
+
+            # Reset any Y velocity
+            if hasattr(enemy, 'velocity_y'):
+                enemy.velocity_y = 0
+
+    def update_enemy_spawns(self, dt: float):
+        """Update enemy spawn system"""
+        if self.__current_room_pos:
+            self.__enemy_spawn_manager.update(self.__current_room_pos, dt)
+
+    def get_active_enemies_in_current_room(self) -> List[Monster]:
+        """Get active enemies in current room"""
+        if self.__current_room_pos:
+            return self.__enemy_spawn_manager.get_active_enemies_for_room(self.__current_room_pos)
+        return []
+
+
     def __get_neighbor_position(self, pos: Tuple[int, int], direction: Direction) -> Tuple[int, int]:
         """Get neighbor position in given direction"""
         dr, dc = direction.value
@@ -1235,3 +1304,141 @@ class DungeonManager:
             print(f"Collected {collected_potion.name} potion!")
 
         return collected_potion
+
+    def get_boss_room_position(self) -> tuple:
+        """Get the position of the boss room in the dungeon grid"""
+        for row in range(self.dungeon_height):
+            for col in range(self.dungeon_width):
+                room = self.rooms.get((row, col))
+                if room and room.is_boss_room():
+                    return (row, col)
+        return None
+
+    def is_room_cleared(self, room_position: tuple) -> bool:
+        """Check if a specific room has been cleared of all enemies"""
+        if not room_position or room_position not in self.rooms:
+            return False
+
+        room = self.rooms[room_position]
+        if not room:
+            return False
+
+        # For boss room, check if boss is defeated
+        if room.is_boss_room():
+            # This would need to track boss state across room transitions
+            # You might want to add a boss_defeated flag to the room or dungeon manager
+            return getattr(room, 'boss_defeated', False)
+
+        # For regular rooms, check if spawn manager considers it cleared
+        return self.enemy_spawn_manager.is_room_cleared(room_position)
+
+    # REPLACE your existing spawn_enemies_for_current_room method in RoomDungeonSystem.py with this:
+
+    def spawn_enemies_for_current_room(self):
+        """Spawn 1-2 enemies per regular room, boss only in boss room"""
+        print(f"=== SPAWNING ENEMIES ===")
+
+        # Get current room
+        room = getattr(self, 'current_room', None)
+        if not room:
+            print("No current room - returning empty list")
+            return []
+
+        print(f"Room found: {type(room).__name__}")
+        print(f"Room position: {room.grid_pos}")
+
+        # Check if this is a boss room using the existing is_boss_room method
+        is_boss = room.is_boss_room()
+        print(f"Is boss room: {is_boss}")
+
+        enemies = []
+
+        try:
+            if is_boss:
+                print("🏰 SPAWNING BOSS ROOM")
+                # Only spawn demon boss in center
+                from src.model.DemonBoss import DemonBoss
+                boss = DemonBoss(400, room.floor_y - 120)  # Position boss on floor
+                enemies.append(boss)
+                print(f"✓ Spawned Demon Boss at (400, {room.floor_y - 120})")
+
+            else:
+                print("🏠 SPAWNING REGULAR ROOM")
+                # Spawn 1-2 random enemies
+                import random
+                enemy_count = random.randint(1, 2)
+
+                # Create positions spread across room
+                if enemy_count == 1:
+                    positions = [(400, room.floor_y - 64)]  # Center
+                else:  # 2 enemies
+                    positions = [(250, room.floor_y - 64), (550, room.floor_y - 64)]  # Left and right
+
+                # Create enemies
+                for i, (x, y) in enumerate(positions):
+                    # Add some random variation
+                    varied_x = x + random.randint(-50, 50)
+                    varied_y = y + random.randint(-10, 10)
+
+                    # Choose random enemy type
+                    if i % 2 == 0:
+                        from src.model.Skeleton import Skeleton
+                        enemy = Skeleton(varied_x, varied_y)
+                        enemy_name = "Skeleton"
+                    else:
+                        from src.model.Ogre import Ogre
+                        enemy = Ogre(varied_x, varied_y)
+                        enemy_name = "Ogre"
+
+                    enemies.append(enemy)
+                    print(f"✓ Spawned {enemy_name} at ({varied_x}, {varied_y})")
+
+        except Exception as e:
+            print(f" Error in spawning: {e}")
+            import traceback
+            traceback.print_exc()
+
+            # Emergency fallback - create basic monsters
+            print("Creating fallback enemies...")
+            try:
+                from src.model.Monster import Monster
+                enemies = [
+                    Monster("Fallback Enemy 1", 100, 20, False, 300, room.floor_y - 64),
+                    Monster("Fallback Enemy 2", 100, 20, False, 500, room.floor_y - 64)
+                ]
+                print("Created fallback enemies")
+            except Exception as fallback_error:
+                print(f"Even fallback failed: {fallback_error}")
+                return []
+
+        print(f"Total enemies created: {len(enemies)}")
+        print(f"=== END SPAWNING ===")
+        return enemies
+
+
+    def _create_enemy_by_type(self, enemy_type, x, y):
+        """Create an enemy of the specified type at the given position"""
+        try:
+            if enemy_type == 'skeleton':
+                from src.model.Skeleton import Skeleton
+                return Skeleton(x, y)
+            elif enemy_type == 'ogre':
+                from src.model.Ogre import Ogre
+                return Ogre(x, y)
+            elif enemy_type == 'demon_boss':
+                from src.model.DemonBoss import DemonBoss
+                return DemonBoss(x, y)
+            else:
+                # Fallback: create a basic monster
+                from src.model.Monster import Monster
+                return Monster(f"{enemy_type.title()} Enemy", 100, 25, False, x, y)
+
+        except Exception as e:
+            print(f"Error creating {enemy_type}: {e}")
+            # Return a basic monster as fallback
+            try:
+                from src.model.Monster import Monster
+                return Monster("Unknown Enemy", 100, 25, False, x, y)
+            except:
+                return None
+

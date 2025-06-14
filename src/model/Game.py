@@ -99,6 +99,8 @@ class Game:
         self._dungeon_manager = None
         self._current_room = None
 
+        self.ground_constrained = True
+
         # Add play time tracking + pause buttons
         self._play_time = 0.0
         self._play_time_start = None
@@ -135,6 +137,8 @@ class Game:
             tile_width= 16,
             tile_height= 16
         )
+
+
 
 
 
@@ -376,6 +380,19 @@ class Game:
 
         self._transition_manager.update(dt)
 
+        # Update enemy spawn manager
+        if self._dungeon_manager:
+            self._dungeon_manager.update_enemy_spawns(dt)
+
+        if hasattr(self, '_active_hero') and self._active_hero is not None:
+            if hasattr(self, '_current_room') and self._current_room is not None:
+                # Set the hero's Y position based on the current room's floor
+                self._active_hero.y = self._current_room.floor_y - self._active_hero.height
+                self._active_hero.ground_y = self._current_room.floor_y
+
+                # Reset vertical velocity to prevent falling
+                self._active_hero.velocity_y = 0
+
         # enforce room bounds
         self._enforce_room_bounds()
 
@@ -405,6 +422,11 @@ class Game:
                     self._h_key_pressed = False
                 
                 # handle hero input
+                if hasattr(self._active_hero, '_facing_right'):
+                    if keys[pygame.K_a]:  # Moving left
+                        self._active_hero._facing_right = False
+                    elif keys[pygame.K_d]:  # Moving right
+                        self._active_hero._facing_right = True
                 self._active_hero.handle_input(keys, False)  # Pass False since we handle attack separately
 
                 # check for door traversal
@@ -427,6 +449,8 @@ class Game:
 
             # Update potions
             self._dungeon_manager.update_potions(dt)
+
+
 
     def _check_door_traversal(self, prev_x: int, prev_y: int):
         """Check if hero has moved into a door and handle traversal"""
@@ -523,7 +547,14 @@ class Game:
         # Clear projectiles from previous room
         self.projectile_manager.projectiles.clear()
 
-        # Spawn enemies for new room if needed
+        # Clear enemies from previous room
+        self._enemies.clear()
+        self.enemy_sprites.empty()
+
+        # IMPORTANT: Sync the current room with dungeon manager
+        self._dungeon_manager.current_room = self._current_room
+
+        # Spawn enemies for new room
         self._spawn_room_enemies()
 
         # Handle any room-specific items or events
@@ -531,32 +562,57 @@ class Game:
             self._handle_boss_room_entry()
 
     def _spawn_room_enemies(self):
-        """Spawn enemies appropriate for the current room"""
+        """Debug version of spawn method"""
+        print(f"\n=== SPAWNING ENEMIES ===")
+        print(f"Current room: {self._current_room}")
+        print(f"Dungeon manager: {self._dungeon_manager}")
+
         if not self._current_room:
+            print("No current room - skipping spawn")
             return
 
         # Clear existing enemies
+        print(f"Clearing {len(self._enemies)} existing enemies")
         self._enemies.clear()
-        self.enemy_sprites.empty()
+        for sprite in list(self.enemy_sprites):
+            sprite.kill()
 
-        # Example enemy spawning logic
-        if self._current_room.is_boss_room():
-            # Spawn boss
-            boss = DemonBoss(self._current_room.width // 2, self._current_room.floor_y - 100)
-            self._enemies.append(boss)
-            self.enemy_sprites.add(boss)
-            self.all_sprites.add(boss)
-        elif not self._current_room.is_start_room():
-            # Spawn regular enemies
-            import random
-            num_enemies = random.randint(1, 3)
-            for i in range(num_enemies):
-                # Use your monster factory here
-                enemy_x = random.randint(100, self._current_room.width - 100)
-                enemy_y = self._current_room.floor_y - 60
-                # Create enemy using your existing system
-                # enemy = create_random_enemy(enemy_x, enemy_y)
-                # self._enemies.append(enemy)
+
+        self._dungeon_manager.current_room = self._current_room
+        # Spawn new enemies
+        try:
+            print("Calling spawn_enemies_for_current_room...")
+            new_enemies = self._dungeon_manager.spawn_enemies_for_current_room()
+            print(f"Received {len(new_enemies)} enemies from spawn method")
+
+            for i, enemy in enumerate(new_enemies):
+                print(f"Processing enemy {i + 1}: {enemy}")
+
+                # Set the active hero as target
+                if hasattr(enemy, 'set_target') and self._active_hero:
+                    enemy.set_target(self._active_hero)
+                    print(f"  Set target to {self._active_hero}")
+
+                # Add to game tracking
+                self._enemies.append(enemy)
+                self.enemy_sprites.add(enemy)
+                self.all_sprites.add(enemy)
+
+                # Add to other sprite groups if they exist
+                if hasattr(self, 'midground_sprites'):
+                    self.midground_sprites.add(enemy)
+                if hasattr(self, 'damageable_sprites'):
+                    self.damageable_sprites.add(enemy)
+
+                print(f"  Added {getattr(enemy, 'name', 'Unknown')} at ({enemy.rect.x}, {enemy.rect.y})")
+
+            print(f"Final enemy count: {len(self._enemies)}")
+            print(f"=== SPAWNING COMPLETE ===\n")
+
+        except Exception as e:
+            print(f" Error in spawn process: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _show_door_locked_message(self, room_pos, direction):
         """Show a message when a door is locked"""
@@ -634,8 +690,19 @@ class Game:
         self._handle_platform_collisions()
         self._handle_hero_floor_collision()
 
+        # Check if all enemies in room are defeated
+        if self._dungeon_manager:
+            active_enemies = self._dungeon_manager.get_active_enemies_in_current_room()
+            if not active_enemies and self._current_room and not self._current_room.is_start_room():
+                # Room cleared! Could trigger rewards, effects, etc.
+                self._handle_room_cleared()
+
+    def _handle_room_cleared(self):
+        """Handle when a room is cleared of enemies"""
+        print(f"Room at {self._dungeon_manager.get_current_room_position()} cleared!")
+
     def _handle_hero_enemy_collisions(self):
-        """Handle hero and enemy collisions"""
+        """Handle hero and enemy collisions with proper death handling"""
         for hero in self.hero_sprites:
             if not hero.is_alive or not hero.is_attacking:
                 continue
@@ -650,8 +717,44 @@ class Game:
 
                 if hasattr(enemy, 'hitbox') and attack_hitbox.colliderect(enemy.hitbox):
                     damage = hero.calculate_damage(enemy)
-                    if enemy.take_damage(damage):
-                        hero.hit_targets.add(enemy)
+                    enemy_died = enemy.take_damage(damage)  # Capture return value
+                    hero.hit_targets.add(enemy)
+
+                    # Handle enemy death properly if it died
+                    if enemy_died:
+                        self._handle_enemy_death(enemy)
+
+    def _handle_enemy_death(self, enemy):
+        """Handle when an enemy dies"""
+        from src.model.DemonBoss import DemonBoss  # Import at top of file instead
+
+        # Check if this is the boss being defeated
+        if isinstance(enemy, DemonBoss) and self._current_room and self._current_room.is_boss_room():
+            # Mark boss as defeated in the room
+            current_pos = self._dungeon_manager.get_current_room_position()
+            if current_pos:
+                # Add boss_defeated flag to the room
+                self._current_room.boss_defeated = True
+                print("BOSS DEFEATED! Victory achieved!")
+
+        # Remove enemy from all game tracking
+        if enemy in self._enemies:
+            self._enemies.remove(enemy)
+
+        # Remove from sprite groups
+        self.enemy_sprites.remove(enemy)
+        self.all_sprites.remove(enemy)
+        self.midground_sprites.remove(enemy)
+        self.damageable_sprites.remove(enemy)
+
+    # ADD this method to check if boss is defeated:
+    def _is_boss_defeated(self) -> bool:
+        """Check if the boss has been defeated in the boss room"""
+        if not self._current_room or not self._current_room.is_boss_room():
+            return False
+
+        # Check if the room has been marked as having defeated boss
+        return getattr(self._current_room, 'boss_defeated', False)
 
     def _handle_projectile_collisions(self):
         """Handle projectile collisions"""
@@ -663,11 +766,16 @@ class Game:
             self.platform_manager.check_collisions(hero)
 
     def _check_game_state(self):
-        """Check for win/lose conditions"""
+        """Check for win/lose conditions with proper boss victory logic"""
+        # Check for game over condition (hero dies)
         if all(not hero.is_alive for hero in self._heroes.values()):
             self.set_game_state(GameState.GAME_OVER)
-        elif self._enemies and all(not enemy.is_alive for enemy in self._enemies):
+            return
+
+        # Check for victory condition - only when boss is defeated in boss room
+        if self._is_boss_defeated():
             self.set_game_state(GameState.VICTORY)
+            return
 
     def __del__(self):
         """Ensure proper cleanup when game object is destroyed"""
@@ -816,28 +924,18 @@ class Game:
                 pygame.draw.rect(self.screen, color, rect)
 
     def _draw_enemies(self):
-        """Draw enemies with camera offset"""
+        """Draw enemies with appropriate rendering order"""
         for enemy in self._enemies:
-            if enemy.is_alive:
-                # Draw enemy body
-                enemy_rect = pygame.Rect(
-                    enemy.x - self._camera_x,
-                    enemy.y - self._camera_y,
-                    enemy.width,
-                    enemy.height
-                )
-                color = (200, 50, 50) if not enemy.is_invulnerable else (255, 150, 150)
-                pygame.draw.rect(self.screen, color, enemy_rect)
+            if enemy.is_visible_on_screen(self._camera_x, self._camera_y, self.width, self.height):
+                # Only draw enemies whose hitbox is on screen
+                if hasattr(enemy, 'draw') and callable(enemy.draw):
+                    enemy.draw(self.screen, self._camera_x, self._camera_y)
+                else:
+                    screen_x = enemy.rect.x - self._camera_x
+                    screen_y = enemy.rect.y - self._camera_y
+                    self.screen.blit(enemy.image, (screen_x, screen_y))
 
-                # Draw health bar
-                health_percent = enemy.health / enemy.max_health
-                bar_width = enemy.width
-                bar_height = 5
-                bar_x = enemy.x - self._camera_x
-                bar_y = enemy.y - self._camera_y - 10
-
-                pygame.draw.rect(self.screen, (100, 0, 0), (bar_x, bar_y, bar_width, bar_height))
-                pygame.draw.rect(self.screen, (0, 200, 0), (bar_x, bar_y, bar_width * health_percent, bar_height))
+                # Optionally, draw health bars, effects, etc.
 
     def _draw_heroes(self):
         """Draw heroes with camera offset"""
@@ -1219,6 +1317,7 @@ class Game:
 
         self.__minimap_integration.draw_with_ui(self.screen)
 
+
     def _draw_pause_overlay(self):
         overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))  # Semi-transparent black overlay
@@ -1258,6 +1357,39 @@ class Game:
             self.state = GameState.MENU
             # Reset any game state as needed
             self._reset_game()
+
+    # boss checking
+    def _is_boss_defeated(self) -> bool:
+        """Check if the boss has been defeated in the boss room"""
+        if not self._current_room or not self._current_room.is_boss_room():
+            return False
+
+        # Check if there's a demon boss among the enemies and if it's defeated
+        for enemy in self._enemies:
+            if isinstance(enemy, DemonBoss):
+                return not enemy.is_alive
+
+        # If we're in boss room but no boss exists, something went wrong
+        # but we shouldn't end the game
+        return False
+
+    def _has_boss_room_been_cleared(self) -> bool:
+        """Check if the boss room has been completely cleared"""
+        if not self._dungeon_manager:
+            return False
+
+        # Get the boss room from the dungeon manager
+        boss_room_pos = self._dungeon_manager.get_boss_room_position()
+        if not boss_room_pos:
+            return False
+
+        # Check if we're currently in the boss room and it's cleared
+        current_pos = self._dungeon_manager.get_current_room_position()
+        if current_pos == boss_room_pos:
+            return self._is_boss_defeated()
+
+        # If not in boss room, check if boss room has been visited and cleared
+        return self._dungeon_manager.is_room_cleared(boss_room_pos)
 
     # ADD PILLAR COLLECTION
     def _check_pillar_collection(self):
@@ -1503,3 +1635,5 @@ class Game:
         except Exception as e:
             print(f"Failed to load game state: {e}")
             return False
+
+

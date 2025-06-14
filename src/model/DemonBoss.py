@@ -535,3 +535,13 @@ class DemonBoss(pygame.sprite.Sprite,):
         draw_x = self.__x - camera_x
         draw_y = self.__y - camera_y
         surface.blit(sprite, (draw_x, draw_y))
+
+    def is_visible_on_screen(self, camera_x, camera_y, screen_width, screen_height):
+        """Check if the demon boss is visible on screen with current camera position"""
+        # Calculate the boss's position on screen
+        screen_x = self.rect.x - camera_x
+        screen_y = self.rect.y - camera_y
+
+        # Check if boss is at least partially visible on screen
+        return (screen_x + self.rect.width > 0 and screen_x < screen_width and
+                screen_y + self.rect.height > 0 and screen_y < screen_height)

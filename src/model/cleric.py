@@ -13,6 +13,8 @@ class Cleric(Hero):
         self.__fireball_speed = 8
         self.__fireball_range = 400
         self.__projectile_manager = None  # Will be set by the game
+        self._facing_right = True
+        self._mirrored_sprites = {}
 
     def calculate_damage(self, target):
         """Clerics damage"""
@@ -122,6 +124,19 @@ class Cleric(Hero):
                 f" | Fireball Range: {self.__fireball_range}"
         )
         return base_str + cleric_specific
+
+    def get_current_sprite(self):
+        """Get sprite, flipped if facing left"""
+        base_sprite = super().get_current_sprite()  # Get normal sprite
+
+        if base_sprite and not self._facing_right:
+            sprite_id = id(base_sprite)
+            if sprite_id not in self._mirrored_sprites:
+                # Create and cache flipped sprite
+                self._mirrored_sprites[sprite_id] = pygame.transform.flip(base_sprite, True, False)
+            return self._mirrored_sprites[sprite_id]
+
+        return base_sprite
 
     # Getters and setters!!
     def get_healing_power(self):

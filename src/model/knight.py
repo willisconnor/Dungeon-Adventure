@@ -1,3 +1,5 @@
+import pygame
+
 from src.model.DungeonHero import Hero
 
 class Knight(Hero):
@@ -5,6 +7,8 @@ class Knight(Hero):
 
     def __init__(self, x, y):
         super().__init__(x, y, hero_type="knight")
+        self._facing_right = True
+        self._mirrored_sprites = {}
 
 
     def calculate_damage(self, target):
@@ -20,3 +24,16 @@ class Knight(Hero):
         super().activate_special_ability()
         # Shield bash logic would be implemented in game system
         # For now, we just trigger the animation
+
+    def get_current_sprite(self):
+        """Get sprite, flipped if facing left"""
+        base_sprite = super().get_current_sprite()  # Get normal sprite
+
+        if base_sprite and not self._facing_right:
+            sprite_id = id(base_sprite)
+            if sprite_id not in self._mirrored_sprites:
+                # Create and cache flipped sprite
+                self._mirrored_sprites[sprite_id] = pygame.transform.flip(base_sprite, True, False)
+            return self._mirrored_sprites[sprite_id]
+
+        return base_sprite

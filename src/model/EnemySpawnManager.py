@@ -194,7 +194,7 @@ class EnemySpawnManager:
         else:
             return (2, 4)
 
-    def spawn_enemies_for_room(self, room_position: Tuple[int, int]) -> List[Monster]:
+    def spawn_enemies_for_room(self, room_position: Tuple[int, int], ground_y_override: int = None) -> List[Monster]:
         """Spawn enemies for a specific room"""
         if room_position not in self.__room_configs:
             return []
@@ -215,6 +215,8 @@ class EnemySpawnManager:
         spawned_enemies = []
         spawn_points = config.get_spawn_points()
         enemy_types = config.get_enemy_types()
+        
+        # Use the corrected method to get enemy count
         enemy_count = min(config.get_enemy_count(), len(spawn_points))
 
         # Shuffle spawn points for variety
@@ -225,12 +227,19 @@ class EnemySpawnManager:
                 spawn_point = spawn_points[i]
                 enemy_type = random.choice(enemy_types)
 
-                # Create enemy at spawn point
+                # Create enemy at spawn point - notice we're using a ground-relative Y position
                 enemy = self.__monster_factory.create_monster(
                     enemy_type,
                     spawn_point.x,
                     spawn_point.y
                 )
+                
+                # Make sure the enemy is positioned correctly relative to the ground
+                # This ensures the enemy's feet are on the ground
+                if ground_y_override is not None:
+                    # Position the enemy with its feet on the ground
+                    enemy_height = enemy.rect.height if hasattr(enemy, 'rect') else 64
+                    enemy.set_position(enemy.rect.x, ground_y_override - enemy_height)
 
                 # Occupy the spawn point
                 spawn_point.occupy()
@@ -245,6 +254,11 @@ class EnemySpawnManager:
                 self.__active_enemies[room_position].append(enemy)
 
         return spawned_enemies
+
+    def create_enemy_at_position(self, x: int, y: int) -> Optional[Monster]:
+        """Create an enemy at the specified position"""
+        enemy_type = random.choice([MonsterType.GORGON, MonsterType.SKELETON, MonsterType.OGRE])
+        return self.__monster_factory.create_monster(enemy_type, x, y)
 
     def update(self, current_room_position: Tuple[int, int], dt: float):
         """Update spawn manager for current room"""
@@ -299,3 +313,17 @@ class EnemySpawnManager:
             config = self.__room_configs[room_position]
             return config.get_enemy_count()
         return 0
+
+    def _setup_ground_movement(self, enemy: Monster):
+        """Setup enemy for ground-only movement"""
+        # Disable vertical movement capabilities
+        if hasattr(enemy, 'can_jump'):
+            enemy.can_jump = False
+        if hasattr(enemy, 'can_fly'):
+            enemy.can_fly = False
+        if hasattr(enemy, 'gravity_enabled'):
+            enemy.gravity_enabled = False
+
+        # Set movement constraints
+        if hasattr(enemy, 'movement_type'):
+            enemy.movement_type = 'ground_only'
