@@ -2,7 +2,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 from src.model.Skeleton import Skeleton
 
-
 class TestSkeleton(unittest.TestCase):
     """Tests for the Skeleton class"""
 

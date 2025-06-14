@@ -105,6 +105,6 @@ class TestOgre(unittest.TestCase):
         if hasattr(self.ogre, "get_strength"):
             self.assertIn(str(self.ogre.get_strength()), ogre_str)
 
-
+#Testing
 if __name__ == '__main__':
     unittest.main()
