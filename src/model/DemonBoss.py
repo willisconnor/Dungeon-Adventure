@@ -3,7 +3,6 @@ import pygame
 import sqlite3
 from src.utils.SpriteSheet import SpriteSheet
 
-
 class DemonBoss(pygame.sprite.Sprite,):
     """Demon boss enemy class with specialized abilities"""
 
