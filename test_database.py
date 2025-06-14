@@ -38,7 +38,7 @@ def test_mock_implementation():
     
     # Test monster stats
     print("\n--- Monster Stats ---")
-    goblin_stats = mock_stats.get_monster_stats('goblin')
+    goblin_stats = mock_stats.get_monster_stats('gorgon')
     if goblin_stats:
         print(f"Goblin stats: {goblin_stats}")
     else:
@@ -86,7 +86,7 @@ def test_sqlite_implementation():
     
     # Test monster stats
     print("\n--- Monster Stats ---")
-    goblin_stats = sqlite_stats.get_monster_stats('goblin')
+    goblin_stats = sqlite_stats.get_monster_stats('gorgon')
     if goblin_stats:
         print(f"Goblin stats: {goblin_stats}")
     else:

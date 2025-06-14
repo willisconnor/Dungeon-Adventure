@@ -15,14 +15,14 @@ class Direction:
     LEFT = "left"
     RIGHT = "right"
 
-class Goblin(Monster):
+class Gorgon(Monster):
     """
-    Goblin enemy (aka Gorgon)
+    Gorgon enemy
     Fast but weaker enemy that attacks and moves quickly
     """
 
     def __init__(self, x=0, y=0):
-        # Initialize with Goblin stats
+        # Initialize with Gorgon stats
         super().__init__("Gorgon", 70, 10, is_boss=False)
         
         # Core attributes
@@ -66,7 +66,7 @@ class Goblin(Monster):
 
     @property
     def is_alive(self):
-        """Check if goblin is alive"""
+        """Check if gorgon is alive"""
         return self.__is_alive
     
     def get_enemy_type(self):
@@ -106,11 +106,11 @@ class Goblin(Monster):
         return self.rect.y
     
     def is_invulnerable(self):
-        """Check if goblin is currently invulnerable"""
+        """Check if gorgon is currently invulnerable"""
         return self.__is_invulnerable
     
     def is_attacking(self):
-        """Check if goblin is attacking"""
+        """Check if gorgon is attacking"""
         return self.__animation_state == AnimationState.ATTACKING
     
     def take_damage(self, damage):
@@ -173,7 +173,7 @@ class Goblin(Monster):
         return self.__target
     
     def move_towards_target(self, target_x, target_y, dt):
-        """Move the goblin towards a target position"""
+        """Move the gorgon towards a target position"""
         # Don't move if dead, attacking or hurt
         if not self.__is_alive or self.__animation_state in [AnimationState.ATTACKING, AnimationState.HURT, AnimationState.DYING]:
             return
@@ -267,27 +267,27 @@ class Goblin(Monster):
     
     # Original getter and setter methods for backward compatibility
     def get_special_skill(self):
-        """Get the goblin's special skill"""
+        """Get the gorgon's special skill"""
         return self.__special_skill
 
     def set_special_skill(self, skill):
-        """Set the goblin's special skill"""
+        """Set the gorgon's special skill"""
         self.__special_skill = skill
 
     def get_movement_speed(self):
-        """Get the goblin's movement speed"""
+        """Get the gorgon's movement speed"""
         return super().get_movement_speed()
 
     def set_movement_speed(self, speed):
-        """Set the goblin's movement speed"""
+        """Set the gorgon's movement speed"""
         super().set_movement_speed(speed)
 
     def get_attack_speed(self):
-        """Get the goblin's attack speed"""
+        """Get the gorgon's attack speed"""
         return self.__attack_cooldown_max
 
     def set_attack_speed(self, speed):
-        """Set the goblin's attack speed"""
+        """Set the gorgon's attack speed"""
         self.__attack_cooldown_max = speed
         self.set_attack_cooldown(speed)
 
@@ -309,6 +309,6 @@ class Goblin(Monster):
         self.set_movement_speed(speed)
     
     def __str__(self):
-        """String representation of the goblin"""
+        """String representation of the gorgon"""
         status = "DEAD" if not self.__is_alive else f"HP: {self.__health}/{self.__max_health}"
         return f"Gorgon ({status}, DMG: {self.__damage}, Speed: {self.get_movement_speed()})"

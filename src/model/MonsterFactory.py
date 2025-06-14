@@ -4,7 +4,7 @@ from typing import Union, Optional
 
 # Import existing monster classes
 from src.model.Monster import Monster
-from src.model.Goblin import Goblin
+from src.model.Gorgon import Gorgon
 from src.model.Skeleton import Skeleton
 from src.model.Ogre import Ogre
 from src.model.DemonBoss import DemonBoss
@@ -76,9 +76,9 @@ class DungeonMonsterFactory(MonsterFactory):
         # This should never be reached due to the validation above
         raise ValueError(f"Factory method not implemented for {monster_type}")
 
-    def _create_gorgon(self) -> Goblin:
+    def _create_gorgon(self) -> Gorgon:
         """Create a Goblin using  Goblin class"""
-        return Goblin()
+        return Gorgon()
 
     def _create_skeleton(self) -> Skeleton:
         """Create a Skeleton using Skeleton class"""

@@ -23,7 +23,7 @@ class CharacterStats(ABC):
         """Get stats for a specific monster type.
         
         Args:
-            monster_type: The type of monster (e.g., 'goblin', 'orc', 'boss')
+            monster_type: The type of monster (e.g., 'gorgon', 'orc', 'boss')
             
         Returns:
             Dictionary containing monster stats or None if not found

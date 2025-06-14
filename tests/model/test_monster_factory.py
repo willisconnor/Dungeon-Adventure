@@ -1,6 +1,6 @@
 import unittest
 from src.model.MonsterFactory import MonsterFactory, MonsterType
-from src.model.Goblin import Goblin
+from src.model.Gorgon import Gorgon
 from src.model.Ogre import Ogre
 from src.model.Skeleton import Skeleton
 from src.model.DemonBoss import DemonBoss

@@ -29,7 +29,7 @@ class TestCleric(unittest.TestCase):
         """Test cleric damage calculation for normal enemies"""
         # Create a mock normal enemy
         normal_enemy = MagicMock()
-        normal_enemy.enemy_type = "goblin"
+        normal_enemy.enemy_type = "gorgon"
         
         base_damage = self.cleric.get_damage()
         damage = self.cleric.calculate_damage(normal_enemy)
