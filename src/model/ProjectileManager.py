@@ -1,3 +1,4 @@
+import math
 import pygame
 from enum import Enum
 
@@ -5,19 +6,70 @@ from src.model.DungeonEntity import Direction
 
 
 class ProjectileType(Enum):
+    """
+    Enumeration for different types of projectiles in the game.
+
+    Constants:
+        ARROW: Arrow projectile type (value: 0)
+        FIREBALL: Fireball projectile type (value: 1)
+    """
     ARROW = 0
     FIREBALL = 1
 
 
 class Projectile:
-    """Class to handle projectiles like arrows and fireballs"""
+    """
+    Represents a projectile entity in the game such as arrows and fireballs.
+
+    This class handles the movement, animation, collision detection, and lifecycle
+    of projectiles fired by game entities.
+
+    Attributes:
+        x (float): Current x-coordinate position
+        y (float): Current y-coordinate position
+        direction (Direction): Direction the projectile is traveling
+        projectile_type (ProjectileType): Type of projectile (ARROW or FIREBALL)
+        owner (Entity): Reference to the entity that fired this projectile
+        damage (int): Damage dealt by this projectile
+        speed (float): Movement speed of the projectile
+        max_range (float): Maximum distance the projectile can travel
+        distance_traveled (float): Current distance traveled from start position
+        active (bool): Whether the projectile is still active
+        width (int): Width of the projectile sprite
+        height (int): Height of the projectile sprite
+        hitbox (pygame.Rect): Collision detection rectangle
+        frame_index (int): Current animation frame index
+        animation_counter (float): Counter for animation timing
+        frames (list): List of loaded sprite frames
+        frame_count (int): Total number of animation frames
+        start_x (float): Starting x-coordinate for range calculation
+        start_y (float): Starting y-coordinate for range calculation
+        hit_targets (set): Set of targets already hit by this projectile
+        angle (float): Trajectory angle in degrees
+        is_homing (bool): Whether this projectile homes in on targets
+        target (Entity): Target entity for homing projectiles
+        homing_strength (float): Strength of homing effect (0.0 to 1.0)
+    """
 
     def __init__(self, x, y, direction, projectile_type, owner, damage=0, speed=0, range=0):
+        """
+        Initialize a new projectile instance.
+
+        Args:
+            x (float): Starting x-coordinate
+            y (float): Starting y-coordinate
+            direction (Direction): Direction the projectile travels
+            projectile_type (ProjectileType): Type of projectile to create
+            owner (Entity): Entity that fired this projectile
+            damage (int, optional): Damage dealt by projectile. Defaults to 0.
+            speed (float, optional): Movement speed. Defaults to 0.
+            range (float, optional): Maximum travel distance. Defaults to 0.
+        """
         self.x = x
         self.y = y
-        self.direction = direction  # Direction enum (LEFT or RIGHT)
+        self.direction = direction
         self.projectile_type = projectile_type
-        self.owner = owner  # Reference to the entity that fired the projectile
+        self.owner = owner
         self.damage = damage
         self.speed = speed
         self.max_range = range
@@ -27,9 +79,9 @@ class Projectile:
         # Set projectile dimensions based on type
         if projectile_type == ProjectileType.ARROW:
             self.width = 64
-            self.height = 96  # Increased height for better visibility
+            self.height = 96
         elif projectile_type == ProjectileType.FIREBALL:
-            self.width = 64  # Updated to match Charge.png frame size
+            self.width = 64
             self.height = 64
 
         # Initialize hitbox
@@ -38,7 +90,7 @@ class Projectile:
         # Animation properties
         self.frame_index = 0
         self.animation_counter = 0
-        self.frames = []  # Store loaded frames
+        self.frames = []
         self.frame_count = 0
 
         # Load sprite frames
@@ -52,7 +104,7 @@ class Projectile:
         self.hit_targets = set()
 
         # Trajectory properties
-        self.angle = 0  # Trajectory angle in degrees (0 = right, 90 = up, 180 = left, 270 = down)
+        self.angle = 0
         if direction == Direction.RIGHT:
             self.angle = 0
         else:  # Direction.LEFT
@@ -61,24 +113,35 @@ class Projectile:
         # For homing projectiles
         self.is_homing = False
         self.target = None
-        self.homing_strength = 0.1  # How strongly it homes in on target
+        self.homing_strength = 0.1
 
     def _load_sprite_frames(self):
-        """Load sprite frames for projectile animation"""
+        """
+        Load sprite frames for projectile animation from asset files.
+
+        Loads different sprites based on projectile type:
+        - FIREBALL: Loads from Charge.png sprite sheet (64x64 frames)
+        - ARROW: Loads from Arrow.png single sprite
+
+        Falls back to colored rectangles if sprite loading fails.
+
+        Raises:
+            Exception: If sprite files cannot be loaded (handled gracefully)
+        """
         try:
             if self.projectile_type == ProjectileType.FIREBALL:
                 # Load fireball sprite sheet from Charge.png
                 sprite_path = "assets/sprites/heroes/cleric/Fire_Cleric/Charge.png"
                 sprite_sheet = pygame.image.load(sprite_path).convert_alpha()
-                
+
                 # Get sprite sheet dimensions
                 sheet_width, sheet_height = sprite_sheet.get_size()
-                
+
                 # Use 64x64 frames
                 frame_width = 64
                 frame_height = 64
                 num_frames = sheet_width // frame_width
-                
+
                 # Extract frames from sprite sheet
                 self.frames = []
                 for i in range(num_frames):
@@ -86,17 +149,17 @@ class Projectile:
                     frame = pygame.Surface((frame_width, frame_height), pygame.SRCALPHA)
                     frame.blit(sprite_sheet, (0, 0), (x, 0, frame_width, frame_height))
                     self.frames.append(frame)
-                
+
                 self.frame_count = len(self.frames)
                 print(f"Loaded {self.frame_count} fireball frames from Charge.png (64x64)")
-                
+
             elif self.projectile_type == ProjectileType.ARROW:
                 # Load arrow sprite
                 sprite_path = "assets/sprites/heroes/archer/Samurai_Archer/Arrow.png"
                 arrow_sprite = pygame.image.load(sprite_path).convert_alpha()
                 self.frames = [arrow_sprite]
                 self.frame_count = 1
-                
+
         except Exception as e:
             print(f"Error loading projectile sprites: {e}")
             # Fallback: create colored rectangles
@@ -108,16 +171,23 @@ class Projectile:
                 fallback_sprite = pygame.Surface((32, 8), pygame.SRCALPHA)
                 fallback_sprite.fill((200, 200, 100))  # Yellow color
                 self.frames = [fallback_sprite]
-            
+
             self.frame_count = 1
 
     def update(self, dt):
-        """Update projectile position and check if it's expired"""
+        """
+        Update projectile position, animation, and check expiration.
+
+        Handles movement based on angle and speed, applies homing effects if enabled,
+        updates animation frames, and deactivates projectile if it exceeds max range.
+
+        Args:
+            dt (float): Delta time since last update in seconds
+        """
         if not self.active:
             return
 
         # Calculate movement based on angle
-        import math
         dx = self.speed * math.cos(math.radians(self.angle)) * dt * 60
         dy = self.speed * math.sin(math.radians(self.angle)) * dt * 60
 
@@ -157,7 +227,14 @@ class Projectile:
             self.active = False
 
     def _update_animation(self, dt):
-        """Update projectile animation frames"""
+        """
+        Update projectile animation frames based on projectile type.
+
+        Only fireballs are animated, arrows remain static.
+
+        Args:
+            dt (float): Delta time since last update in seconds
+        """
         # Different animation speed by projectile type
         frame_rate = 8 if self.projectile_type == ProjectileType.FIREBALL else 0
 
@@ -169,7 +246,15 @@ class Projectile:
                 self.frame_index = (self.frame_index + 1) % self.frame_count
 
     def check_collision(self, targets):
-        """Check collision with potential targets"""
+        """
+        Check collision with potential targets and apply damage.
+
+        Args:
+            targets (list): List of target entities to check collision against
+
+        Returns:
+            list: List of targets that were hit by this projectile
+        """
         if not self.active:
             return []
 
@@ -197,32 +282,62 @@ class Projectile:
         return hit_targets
 
     def get_current_sprite(self):
-        """Get the current sprite frame for this projectile"""
+        """
+        Get the current sprite frame for rendering this projectile.
+
+        Returns:
+            pygame.Surface: Current sprite frame, or None if no frames loaded
+        """
         if self.frames and self.frame_index < len(self.frames):
             return self.frames[self.frame_index]
         return None
 
     def get_sprite_path(self):
-        """Get the sprite path for current projectile frame"""
+        """
+        Get the sprite file path for the current projectile frame.
+
+        Returns:
+            str: Path to the sprite file for this projectile type
+        """
         if self.projectile_type == ProjectileType.ARROW:
             return "assets/sprites/heroes/archer/Samurai_Archer/Arrow.png"
         elif self.projectile_type == ProjectileType.FIREBALL:
-            # For animated fireballs, might need to return specific frame
             return f"assets/sprites/heroes/cleric/Fire_Cleric/Fireball_{self.frame_index}.png"
 
 
 class ProjectileManager:
-    """Class to manage multiple projectiles, all in the game"""
+    """
+    Manages all projectiles in the game.
+
+    This class handles updating, collision detection, and cleanup of all active
+    projectiles in the game world.
+
+    Attributes:
+        projectiles (list): List of all active projectiles
+    """
 
     def __init__(self):
+        """
+        Initialize a new ProjectileManager instance.
+        """
         self.projectiles = []
 
     def add_projectile(self, projectile):
-        """Add a projectile to be managed"""
+        """
+        Add a projectile to be managed by this manager.
+
+        Args:
+            projectile (Projectile): The projectile instance to add
+        """
         self.projectiles.append(projectile)
 
     def update(self, dt):
-        """Update all active projectiles"""
+        """
+        Update all active projectiles and remove inactive ones.
+
+        Args:
+            dt (float): Delta time since last update in seconds
+        """
         # Update each projectile
         for projectile in self.projectiles:
             projectile.update(dt)
@@ -231,7 +346,15 @@ class ProjectileManager:
         self.projectiles = [p for p in self.projectiles if p.active]
 
     def check_collisions(self, targets):
-        """Check collisions for all projectiles against targets"""
+        """
+        Check collisions for all projectiles against a list of targets.
+
+        Args:
+            targets (list): List of target entities to check collisions against
+
+        Returns:
+            list: List of all targets hit by any projectile
+        """
         hit_targets = []
 
         for projectile in self.projectiles:
@@ -241,25 +364,42 @@ class ProjectileManager:
         return hit_targets
 
     def clear(self):
-        """Clear all projectiles"""
+        """
+        Remove all projectiles from the manager.
+        """
         self.projectiles = []
 
 
-# Extensions for archer and cleric to handle projectiles
-
 def extend_archer_with_projectiles(Archer):
-    """Extend the Archer class with projectile functionality"""
+    """
+    Extend the Archer class with projectile firing functionality.
 
+    This function modifies the Archer class to fire arrows during attacks
+    instead of just performing melee attacks.
+
+    Args:
+        Archer (class): The Archer class to extend
+
+    Returns:
+        class: The modified Archer class with projectile functionality
+    """
     # Store the original attack method
     original_attack = Archer.attack
 
     def new_attack(self, targets):
-        """Override attack to fire arrows"""
+        """
+        Override attack method to fire arrows.
+
+        Args:
+            targets (list): List of potential targets
+
+        Returns:
+            list: List of targets hit (from original melee attack)
+        """
         if not self.is_attacking or not self.is_alive:
             return []
 
         # Get a reference to the game's projectile manager
-        # This would typically be passed from the game controller
         projectile_manager = self.projectile_manager
 
         # Calculate arrow starting position
@@ -268,10 +408,9 @@ def extend_archer_with_projectiles(Archer):
         else:
             start_x = self.x - 10
 
-        start_y = self.y + 20  # Adjust to match animation
+        start_y = self.y + 20
 
         # Create and fire arrow at appropriate animation frame
-        # This typically happens at a specific frame in the attack animation
         if self.frame_index == 2 and not hasattr(self, 'arrow_fired'):
             # Create new arrow projectile
             arrow = Projectile(
@@ -306,13 +445,28 @@ def extend_archer_with_projectiles(Archer):
 
 
 def extend_cleric_with_projectiles(Cleric):
-    """Extend the Cleric class with projectile functionality"""
+    """
+    Extend the Cleric class with fireball casting functionality.
 
+    This function modifies the Cleric class to cast fireballs during
+    special ability activation.
+
+    Args:
+        Cleric (class): The Cleric class to extend
+
+    Returns:
+        class: The modified Cleric class with projectile functionality
+    """
     # Store the original special ability method
     original_special = Cleric.activate_special_ability
 
     def new_special_ability(self):
-        """Override special ability to cast fireballs"""
+        """
+        Override special ability to cast fireballs.
+
+        Calls the original special ability and then creates and fires
+        a fireball projectile.
+        """
         # First call the original special ability
         original_special(self)
 
@@ -325,7 +479,7 @@ def extend_cleric_with_projectiles(Cleric):
         else:
             start_x = self.x - 20
 
-        start_y = self.y + 10  # Adjust to match animation
+        start_y = self.y + 10
 
         # Create and cast fireball
         fireball = Projectile(
@@ -346,5 +500,3 @@ def extend_cleric_with_projectiles(Cleric):
     Cleric.activate_special_ability = new_special_ability
 
     return Cleric
-
-

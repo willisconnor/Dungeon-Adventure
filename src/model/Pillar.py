@@ -4,24 +4,44 @@ from enum import Enum
 from typing import Tuple, Optional
 
 class PillarType(Enum):
-    """Enumeration of OOP pillar types"""
+    """
+    Represents the different types of Object-Oriented Programming concepts
+    that can be collected as pillars in the game.
+
+    Each pillar type corresponds to a fundamental OOP principle that players
+    can collect to progress through the dungeon.
+    """
     ENCAPSULATION = "Encapsulation"
     INHERITANCE = "Inheritance"
     POLYMORPHISM = "Polymorphism"
     ABSTRACTION = "Abstraction"
     COMPOSITION = "Composition"
 
+
 class Pillar:
-    """Represents a collectible OOP concept pillar"""
+    """
+    A collectible pillar that represents an Object-Oriented Programming concept.
+
+    Each pillar is a glowing, animated object that players can collect by walking
+    into it. Once collected, the pillar disappears and contributes to the player's
+    progress toward accessing the boss room.
+
+    The pillar features visual effects like glowing, floating animation, and
+    color-coding based on the OOP concept it represents.
+    """
 
     def __init__(self, pillar_type: PillarType, x: int, y: int):
         """
-        Initialize a pillar
+        Creates a new pillar at the specified location.
+
+        The pillar will be initialized with appropriate colors and visual effects
+        based on its type. It starts in an uncollected state and begins its
+        floating animation immediately.
 
         Args:
-            pillar_type: Type of OOP concept this pillar represents
-            x: X position in the room
-            y: Y position in the room
+            pillar_type: The OOP concept this pillar represents (affects color and display)
+            x: Horizontal position in the room where the pillar should appear
+            y: Vertical position in the room where the pillar should appear
         """
         # Private attributes with proper encapsulation
         self.__pillar_type = pillar_type
@@ -41,60 +61,128 @@ class Pillar:
         self.__glow_color = self.__get_glow_color()
 
     def __get_pillar_color(self) -> Tuple[int, int, int]:
-        """Get base color based on pillar type"""
+        """
+        Determines the base color for this pillar based on its type.
+
+        Each OOP concept has its own distinctive color to help players
+        visually identify what they're collecting:
+        - Encapsulation: Blue (represents containment)
+        - Inheritance: Pink (represents relationships)
+        - Polymorphism: Green (represents flexibility)
+        - Abstraction: Orange (represents simplification)
+        - Composition: Purple (represents building blocks)
+
+        Returns:
+            RGB color tuple for the pillar's base appearance
+        """
         colors = {
             PillarType.ENCAPSULATION: (100, 150, 200),  # Blue
-            PillarType.INHERITANCE: (200, 100, 150),     # Pink
-            PillarType.POLYMORPHISM: (150, 200, 100),   # Green
-            PillarType.ABSTRACTION: (200, 150, 100),    # Orange
-            PillarType.COMPOSITION: (150, 100, 200)     # Purple
+            PillarType.INHERITANCE: (200, 100, 150),  # Pink
+            PillarType.POLYMORPHISM: (150, 200, 100),  # Green
+            PillarType.ABSTRACTION: (200, 150, 100),  # Orange
+            PillarType.COMPOSITION: (150, 100, 200)  # Purple
         }
         return colors.get(self.__pillar_type, (150, 150, 150))
 
     def __get_glow_color(self) -> Tuple[int, int, int]:
-        """Get glow color for visual effect"""
+        """
+        Creates a brighter version of the base color for the glow effect.
+
+        The glow color is used for the pillar's animated light effect and
+        highlight areas. It's calculated by brightening each RGB component
+        of the base color while ensuring we don't exceed the maximum value.
+
+        Returns:
+            RGB color tuple for the pillar's glow effects
+        """
         base = self.__base_color
         return (min(255, base[0] + 50), min(255, base[1] + 50), min(255, base[2] + 50))
 
     @property
     def pillar_type(self) -> PillarType:
-        """Get the pillar type (read-only)"""
+        """
+        The OOP concept this pillar represents.
+
+        This property is read-only to prevent external code from changing
+        the pillar's fundamental identity after creation.
+
+        Returns:
+            The PillarType enum value for this pillar
+        """
         return self.__pillar_type
 
     @property
     def name(self) -> str:
-        """Get the pillar name (read-only)"""
+        """
+        The human-readable name of the OOP concept this pillar represents.
+
+        This is useful for displaying information to the player or in debug output.
+
+        Returns:
+            String name of the pillar type (e.g., "Encapsulation")
+        """
         return self.__pillar_type.value
 
     @property
     def is_collected(self) -> bool:
-        """Check if pillar has been collected (read-only)"""
+        """
+        Whether this pillar has been collected by the player.
+
+        Once a pillar is collected, it won't be drawn and can't be collected again.
+        This property is read-only to prevent external tampering with collection state.
+
+        Returns:
+            True if the pillar has been collected, False otherwise
+        """
         return self.__collected
 
     @property
     def rect(self) -> pygame.Rect:
-        """Get collision rectangle (copy to prevent modification)"""
+        """
+        The collision rectangle for this pillar.
+
+        This is used to detect when the player walks into the pillar.
+        A copy is returned to prevent external code from modifying the
+        pillar's collision bounds.
+
+        Returns:
+            Copy of the pillar's collision rectangle
+        """
         return self.__rect.copy()
 
     @property
     def x(self) -> int:
-        """Get X position"""
+        """
+        The horizontal position of the pillar in the room.
+
+        Returns:
+            X coordinate in pixels
+        """
         return self.__x
 
     @property
     def y(self) -> int:
-        """Get Y position"""
+        """
+        The vertical position of the pillar in the room.
+
+        Returns:
+            Y coordinate in pixels
+        """
         return self.__y
 
     def check_collision(self, entity_rect: pygame.Rect) -> bool:
         """
-        Check if entity collides with this pillar
+        Checks if another entity (like the player) is touching this pillar.
+
+        This method is used to detect when the player walks into a pillar
+        and should collect it. Already collected pillars won't register
+        collisions since they're no longer interactive.
 
         Args:
-            entity_rect: Rectangle of the entity to check
+            entity_rect: The collision rectangle of the entity to check against
 
         Returns:
-            True if collision detected and pillar not yet collected
+            True if the entity is touching this pillar and it hasn't been collected yet
         """
         if self.__collected:
             return False
@@ -102,10 +190,15 @@ class Pillar:
 
     def collect(self) -> bool:
         """
-        Collect the pillar
+        Attempts to collect this pillar.
+
+        When called, this marks the pillar as collected so it will no longer
+        be drawn or interactive. This should typically be called when the
+        player walks into the pillar.
 
         Returns:
-            True if successfully collected, False if already collected
+            True if the pillar was successfully collected (wasn't already collected),
+            False if it was already collected
         """
         if not self.__collected:
             self.__collected = True
@@ -114,10 +207,14 @@ class Pillar:
 
     def update(self, dt: float):
         """
-        Update pillar animation
+        Updates the pillar's visual animations each frame.
+
+        This handles the glowing effect and floating animation that makes
+        the pillar more visually appealing and easier to spot. The animations
+        only run while the pillar hasn't been collected.
 
         Args:
-            dt: Delta time in seconds
+            dt: Time elapsed since the last update, in seconds
         """
         if not self.__collected:
             # Update glow effect
@@ -128,11 +225,18 @@ class Pillar:
 
     def draw(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
         """
-        Draw the pillar
+        Renders the pillar on the screen with all its visual effects.
+
+        This creates a layered visual effect with an outer glow, the main pillar
+        body, highlights, and a text initial. The pillar gently floats up and
+        down and pulses with a glow effect to attract the player's attention.
+
+        Collected pillars won't be drawn at all.
 
         Args:
-            surface: Surface to draw on
-            camera_offset: Camera offset for scrolling
+            surface: The pygame surface to draw the pillar on
+            camera_offset: How much to offset the drawing position for camera scrolling.
+                         Tuple of (x_offset, y_offset) in pixels.
         """
         if self.__collected:
             return
@@ -180,57 +284,144 @@ class Pillar:
 
 
 class PillarManager:
-    """Manages pillar collection and tracking"""
+    """
+    Manages all the pillars in the dungeon and tracks the player's collection progress.
+
+    This class handles spawning pillars in different rooms, checking for collections,
+    updating animations, and determining when the player has collected enough pillars
+    to access the boss room. It also provides a UI display for the player's progress.
+
+    The manager organizes pillars by room location and maintains a global collection
+    state that persists as the player moves between rooms.
+    """
 
     def __init__(self):
-        """Initialize the pillar manager"""
+        """
+        Creates a new pillar manager with empty collections.
+
+        The manager starts with no pillars spawned and no pillars collected.
+        Pillars must be added to rooms using add_pillar_to_room() before they
+        can be interacted with.
+        """
         self.__pillars_by_room = {}  # Dict[Tuple[int, int], List[Pillar]]
         self.__collected_pillars = set()  # Set of PillarType
         self.__total_pillars_spawned = 0
 
     @property
     def collected_count(self) -> int:
-        """Get number of pillars collected"""
+        """
+        The number of different pillar types the player has collected.
+
+        This counts unique pillar types, not individual pillar instances.
+        So if there are multiple Encapsulation pillars but the player has
+        collected at least one, this only counts as 1 toward the total.
+
+        Returns:
+            Number of unique pillar types collected (0-5)
+        """
         return len(self.__collected_pillars)
 
     @property
     def total_count(self) -> int:
-        """Get total number of pillars in dungeon"""
+        """
+        The total number of pillar instances that have been placed in the dungeon.
+
+        This counts every individual pillar that was spawned, regardless of type
+        or whether it's been collected. Useful for debugging and statistics.
+
+        Returns:
+            Total number of pillar instances in the dungeon
+        """
         return self.__total_pillars_spawned
 
     def has_collected(self, pillar_type: PillarType) -> bool:
-        """Check if specific pillar type has been collected"""
+        """
+        Checks if the player has collected at least one pillar of the specified type.
+
+        This is useful for checking specific prerequisites or displaying
+        which OOP concepts the player has learned.
+
+        Args:
+            pillar_type: The type of pillar to check for
+
+        Returns:
+            True if the player has collected this type of pillar
+        """
         return pillar_type in self.__collected_pillars
 
     def get_collected_pillars(self) -> list:
-        """Get list of collected pillar types"""
+        """
+        Gets a list of all the pillar types the player has collected.
+
+        This returns the actual PillarType enum values, which can be used
+        to display information about what the player has learned or to
+        check for specific combinations of collected pillars.
+
+        Returns:
+            List of PillarType enums representing collected pillars
+        """
         return list(self.__collected_pillars)
 
     def can_access_boss_room(self) -> bool:
-        """Check if player has enough pillars to access boss room"""
+        """
+        Determines if the player has collected enough pillars to face the boss.
+
+        The player needs to collect at least 4 out of 5 different pillar types
+        to demonstrate sufficient understanding of OOP concepts before taking
+        on the final challenge.
+
+        Returns:
+            True if the player has collected 4 or more different pillar types
+        """
         return self.collected_count >= 4
 
     def add_pillar_to_room(self, room_pos: Tuple[int, int], pillar: Pillar):
-        """Add a pillar to a specific room"""
+        """
+        Places a pillar in a specific room of the dungeon.
+
+        This is typically called during dungeon generation to populate rooms
+        with collectible pillars. Each room can contain multiple pillars,
+        and the same pillar type can appear in multiple rooms.
+
+        Args:
+            room_pos: The room coordinates as (x, y) where the pillar should be placed
+            pillar: The pillar instance to add to that room
+        """
         if room_pos not in self.__pillars_by_room:
             self.__pillars_by_room[room_pos] = []
         self.__pillars_by_room[room_pos].append(pillar)
         self.__total_pillars_spawned += 1
 
     def get_pillars_in_room(self, room_pos: Tuple[int, int]) -> list:
-        """Get all pillars in a specific room"""
+        """
+        Gets all the pillars that exist in a specific room.
+
+        This is used to update and draw only the pillars that are relevant
+        to the player's current location, improving performance by not
+        processing pillars in distant rooms.
+
+        Args:
+            room_pos: The room coordinates to get pillars for
+
+        Returns:
+            List of Pillar objects in that room (empty list if room has no pillars)
+        """
         return self.__pillars_by_room.get(room_pos, [])
 
     def check_pillar_collection(self, room_pos: Tuple[int, int], player_rect: pygame.Rect) -> Optional[Pillar]:
         """
-        Check if player collects any pillar in the room
+        Checks if the player is touching any collectible pillars in their current room.
+
+        This should be called each frame with the player's current position.
+        If the player is touching a pillar, it will be automatically collected
+        and added to their progress.
 
         Args:
-            room_pos: Current room position
-            player_rect: Player's collision rectangle
+            room_pos: The room the player is currently in
+            player_rect: The player's collision rectangle
 
         Returns:
-            Collected pillar if any, None otherwise
+            The pillar that was collected if any, or None if no collection occurred
         """
         pillars = self.get_pillars_in_room(room_pos)
 
@@ -243,26 +434,51 @@ class PillarManager:
         return None
 
     def update_pillars_in_room(self, room_pos: Tuple[int, int], dt: float):
-        """Update all pillars in a room"""
+        """
+        Updates the animations for all pillars in the specified room.
+
+        This handles the glowing and floating effects that make pillars
+        visually appealing. Only pillars in the current room need to be
+        updated for performance reasons.
+
+        Args:
+            room_pos: The room whose pillars should be updated
+            dt: Time elapsed since last update, in seconds
+        """
         pillars = self.get_pillars_in_room(room_pos)
         for pillar in pillars:
             pillar.update(dt)
 
     def draw_pillars_in_room(self, room_pos: Tuple[int, int], surface: pygame.Surface,
-                            camera_offset: Tuple[int, int] = (0, 0)):
-        """Draw all pillars in a room"""
+                             camera_offset: Tuple[int, int] = (0, 0)):
+        """
+        Renders all the pillars in the specified room.
+
+        This draws all the visual effects for pillars in the current room,
+        including glow effects, floating animation, and the pillar bodies themselves.
+        Collected pillars won't be drawn.
+
+        Args:
+            room_pos: The room whose pillars should be drawn
+            surface: The pygame surface to draw on
+            camera_offset: Camera scrolling offset as (x_offset, y_offset)
+        """
         pillars = self.get_pillars_in_room(room_pos)
         for pillar in pillars:
             pillar.draw(surface, camera_offset)
 
     def draw_collection_ui(self, surface: pygame.Surface, x: int, y: int):
         """
-        Draw pillar collection UI
+        Draws a user interface showing the player's pillar collection progress.
+
+        This creates a HUD element that shows how many pillars have been collected
+        and provides visual indicators for each pillar type. The display changes
+        color when the player has enough pillars to access the boss room.
 
         Args:
-            surface: Surface to draw on
-            x: X position for UI
-            y: Y position for UI
+            surface: The pygame surface to draw the UI on
+            x: Horizontal position for the UI panel
+            y: Vertical position for the UI panel
         """
         font = pygame.font.Font(None, 24)
 

@@ -4,20 +4,29 @@ from enum import Enum
 from typing import Tuple, Optional
 
 class PotionType(Enum):
-    """Enumeration of potion types"""
+    """
+    Enumeration of potion types available in the game.
+
+    Defines the different types of potions that can be collected and used.
+    """
     HEALING = "healing"
 
 class Potion:
-    """Represents a collectible healing potion"""
+    """
+    Represents a collectible healing potion in the game world.
+
+    A potion is a visual game object that can be collected by the player.
+    It features animated effects including glowing, floating, and rotation.
+    Once collected, the potion becomes invisible and cannot be collected again.
+    """
 
     def __init__(self, potion_type: PotionType, x: int, y: int):
         """
-        Initialize a potion
+        Initializes a new potion instance.
 
-        Args:
-            potion_type: Type of potion this represents
-            x: X position in the room
-            y: Y position in the room
+        @param potion_type The type of potion this represents
+        @param x The X position in the room where the potion is placed
+        @param y The Y position in the room where the potion is placed
         """
         # Private attributes with proper encapsulation
         self.__potion_type = potion_type
@@ -30,64 +39,95 @@ class Potion:
         self.__rotation = 0.0
 
         # Create collision rectangle (slightly larger than triangle for easier collection)
-        self.__rect = pygame.Rect(self.__x - self.__size//2, self.__y - self.__size//2, 
-                                 self.__size, self.__size)
+        self.__rect = pygame.Rect(self.__x - self.__size // 2, self.__y - self.__size // 2,
+                                  self.__size, self.__size)
 
         # Visual properties
         self.__base_color = self.__get_potion_color()
         self.__glow_color = self.__get_glow_color()
 
     def __get_potion_color(self) -> Tuple[int, int, int]:
-        """Get base color based on potion type"""
+        """
+        Determines the base color for the potion based on its type.
+
+        @return RGB color tuple representing the potion's base color
+        """
         colors = {
-            PotionType.HEALING: (255, 100, 100),    # Red
+            PotionType.HEALING: (255, 100, 100),  # Red
         }
         return colors.get(self.__potion_type, (150, 150, 150))
 
     def __get_glow_color(self) -> Tuple[int, int, int]:
-        """Get glow color for visual effect"""
+        """
+        Calculates the glow color for visual effects by brightening the base color.
+
+        @return RGB color tuple representing the potion's glow color
+        """
         base = self.__base_color
         return (min(255, base[0] + 50), min(255, base[1] + 50), min(255, base[2] + 50))
 
     @property
     def potion_type(self) -> PotionType:
-        """Get the potion type (read-only)"""
+        """
+        Gets the type of this potion.
+
+        @return The potion type enum value
+        """
         return self.__potion_type
 
     @property
     def name(self) -> str:
-        """Get the potion name (read-only)"""
+        """
+        Gets the human-readable name of the potion.
+
+        @return String representation of the potion type
+        """
         return self.__potion_type.value
 
     @property
     def is_collected(self) -> bool:
-        """Check if potion has been collected (read-only)"""
+        """
+        Checks whether this potion has been collected by the player.
+
+        @return True if the potion has been collected, false otherwise
+        """
         return self.__collected
 
     @property
     def rect(self) -> pygame.Rect:
-        """Get collision rectangle (copy to prevent modification)"""
+        """
+        Gets a copy of the collision rectangle for this potion.
+
+        @return Copy of the pygame.Rect used for collision detection
+        """
         return self.__rect.copy()
 
     @property
     def x(self) -> int:
-        """Get X position"""
+        """
+        Gets the X coordinate of the potion's position.
+
+        @return X position in pixels
+        """
         return self.__x
 
     @property
     def y(self) -> int:
-        """Get Y position"""
+        """
+        Gets the Y coordinate of the potion's position.
+
+        @return Y position in pixels
+        """
         return self.__y
 
     def check_collision(self, entity_rect: pygame.Rect) -> bool:
         """
-        Check if entity collides with this potion
+        Determines if an entity's rectangle collides with this potion.
 
-        Args:
-            entity_rect: Rectangle of the entity to check
+        Only returns true if the potion hasn't been collected yet.
 
-        Returns:
-            True if collision detected and potion not yet collected
+        @param entity_rect The collision rectangle of the entity to check against
+        @return True if collision is detected and potion is not collected
         """
         if self.__collected:
             return False
@@ -95,10 +135,11 @@ class Potion:
 
     def collect(self) -> bool:
         """
-        Collect the potion
+        Attempts to collect this potion.
 
-        Returns:
-            True if successfully collected, False if already collected
+        Marks the potion as collected if it hasn't been collected already.
+
+        @return True if the potion was successfully collected, false if already collected
         """
         if not self.__collected:
             self.__collected = True
@@ -107,10 +148,11 @@ class Potion:
 
     def update(self, dt: float):
         """
-        Update potion animation
+        Updates the potion's animation state.
 
-        Args:
-            dt: Delta time in seconds
+        Handles glow effects, floating animation, and rotation based on elapsed time.
+
+        @param dt Delta time in seconds since the last update
         """
         if not self.__collected:
             # Update glow effect
@@ -124,11 +166,13 @@ class Potion:
 
     def draw(self, surface: pygame.Surface, camera_offset: Tuple[int, int] = (0, 0)):
         """
-        Draw the potion as a triangle
+        Renders the potion as a triangle with visual effects.
 
-        Args:
-            surface: Surface to draw on
-            camera_offset: Camera offset for scrolling
+        Draws glow effects, the main triangle shape, and a type indicator letter.
+        Does nothing if the potion has been collected.
+
+        @param surface The pygame surface to draw the potion on
+        @param camera_offset Camera offset tuple for scrolling support
         """
         if self.__collected:
             return
@@ -158,27 +202,27 @@ class Potion:
 
         # Create a surface for the triangle to enable rotation
         triangle_surface = pygame.Surface((self.__size * 2, self.__size * 2), pygame.SRCALPHA)
-        
+
         # Calculate triangle points (pointing up)
         center_x, center_y = self.__size, self.__size
         points = [
-            (center_x, center_y - self.__size//2),  # Top point
-            (center_x - self.__size//2, center_y + self.__size//2),  # Bottom left
-            (center_x + self.__size//2, center_y + self.__size//2)   # Bottom right
+            (center_x, center_y - self.__size // 2),  # Top point
+            (center_x - self.__size // 2, center_y + self.__size // 2),  # Bottom left
+            (center_x + self.__size // 2, center_y + self.__size // 2)  # Bottom right
         ]
 
         # Draw triangle
         pygame.draw.polygon(triangle_surface, self.__base_color, points)
-        
+
         # Draw triangle outline
         pygame.draw.polygon(triangle_surface, (255, 255, 255), points, 2)
 
         # Rotate the triangle surface
         rotated_surface = pygame.transform.rotate(triangle_surface, self.__rotation)
-        
+
         # Get the rect of the rotated surface and center it
         rotated_rect = rotated_surface.get_rect(center=(draw_x, draw_y))
-        
+
         # Draw the rotated triangle
         surface.blit(rotated_surface, rotated_rect)
 
@@ -191,10 +235,18 @@ class Potion:
 
 
 class PotionManager:
-    """Manages potion collection and tracking"""
+    """
+    Manages the collection, tracking, and usage of potions throughout the game.
+
+    This class handles potion placement in rooms, collision detection with the player,
+    inventory management, and UI display. It maintains separate tracking for potions
+    by room and overall collection statistics.
+    """
 
     def __init__(self):
-        """Initialize the potion manager"""
+        """
+        Initializes a new potion manager with empty collections and zero counters.
+        """
         self.__potions_by_room = {}  # Dict[Tuple[int, int], List[Potion]]
         self.__collected_potions = {}  # Dict[Tuple[int, int], List[PotionType]] - by room
         self.__total_potions_spawned = 0
@@ -203,7 +255,11 @@ class PotionManager:
 
     @property
     def collected_count(self) -> int:
-        """Get number of potions collected"""
+        """
+        Gets the total number of potions collected across all rooms.
+
+        @return Total count of collected potions
+        """
         total = 0
         for room_potions in self.__collected_potions.values():
             total += len(room_potions)
@@ -211,49 +267,81 @@ class PotionManager:
 
     @property
     def total_count(self) -> int:
-        """Get total number of potions in dungeon"""
+        """
+        Gets the total number of potions that have been spawned in the dungeon.
+
+        @return Total count of potions in the game world
+        """
         return self.__total_potions_spawned
 
     @property
     def healing_potions_collected(self) -> int:
-        """Get number of healing potions collected"""
+        """
+        Gets the number of healing potions that have been collected.
+
+        @return Count of healing potions collected
+        """
         return self.__healing_potions_collected
 
     @property
     def consumable_potions(self) -> int:
-        """Get number of potions available for use"""
+        """
+        Gets the number of potions available for consumption by the player.
+
+        @return Count of potions in the player's usable inventory
+        """
         return self.__consumable_potions
 
     def has_collected_in_room(self, room_pos: Tuple[int, int], potion_type: PotionType) -> bool:
-        """Check if specific potion type has been collected in a room"""
+        """
+        Checks if a specific type of potion has been collected in a given room.
+
+        @param room_pos The room coordinates to check
+        @param potion_type The type of potion to look for
+        @return True if the specified potion type has been collected in that room
+        """
         room_potions = self.__collected_potions.get(room_pos, [])
         return potion_type in room_potions
 
     def get_collected_potions_in_room(self, room_pos: Tuple[int, int]) -> list:
-        """Get list of collected potion types in a room"""
+        """
+        Retrieves a list of all potion types collected in a specific room.
+
+        @param room_pos The room coordinates to query
+        @return Copy of the list containing collected potion types for that room
+        """
         return self.__collected_potions.get(room_pos, []).copy()
 
     def add_potion_to_room(self, room_pos: Tuple[int, int], potion: Potion):
-        """Add a potion to a specific room"""
+        """
+        Adds a potion to a specific room and increments the total spawn counter.
+
+        @param room_pos The room coordinates where the potion should be placed
+        @param potion The potion instance to add to the room
+        """
         if room_pos not in self.__potions_by_room:
             self.__potions_by_room[room_pos] = []
         self.__potions_by_room[room_pos].append(potion)
         self.__total_potions_spawned += 1
 
     def get_potions_in_room(self, room_pos: Tuple[int, int]) -> list:
-        """Get all potions in a specific room"""
+        """
+        Retrieves all potions present in a specific room.
+
+        @param room_pos The room coordinates to query
+        @return List of potion instances in the specified room
+        """
         return self.__potions_by_room.get(room_pos, [])
 
     def check_potion_collection(self, room_pos: Tuple[int, int], player_rect: pygame.Rect) -> Optional[Potion]:
         """
-        Check if player collects any potion in the room
+        Checks if the player collides with any potion in the current room and handles collection.
 
-        Args:
-            room_pos: Current room position
-            player_rect: Player's collision rectangle
+        Updates collection statistics and inventory when a potion is collected.
 
-        Returns:
-            Collected potion if any, None otherwise
+        @param room_pos The current room coordinates
+        @param player_rect The player's collision rectangle
+        @return The collected potion instance if any, None otherwise
         """
         potions = self.get_potions_in_room(room_pos)
 
@@ -264,22 +352,21 @@ class PotionManager:
                     if room_pos not in self.__collected_potions:
                         self.__collected_potions[room_pos] = []
                     self.__collected_potions[room_pos].append(potion.potion_type)
-                    
+
                     # Track healing potions specifically
                     if potion.potion_type == PotionType.HEALING:
                         self.__healing_potions_collected += 1
                         self.__consumable_potions += 1  # Add to consumable inventory
-                    
+
                     return potion
 
         return None
 
     def use_healing_potion(self) -> bool:
         """
-        Use a healing potion if available
-        
-        Returns:
-            True if potion was used, False if no potions available
+        Consumes one healing potion from the player's inventory if available.
+
+        @return True if a potion was successfully used, false if no potions available
         """
         if self.__consumable_potions > 0:
             self.__consumable_potions -= 1
@@ -287,26 +374,38 @@ class PotionManager:
         return False
 
     def update_potions_in_room(self, room_pos: Tuple[int, int], dt: float):
-        """Update all potions in a room"""
+        """
+        Updates the animation state of all potions in a specific room.
+
+        @param room_pos The room coordinates containing potions to update
+        @param dt Delta time in seconds since the last update
+        """
         potions = self.get_potions_in_room(room_pos)
         for potion in potions:
             potion.update(dt)
 
     def draw_potions_in_room(self, room_pos: Tuple[int, int], surface: pygame.Surface,
-                            camera_offset: Tuple[int, int] = (0, 0)):
-        """Draw all potions in a room"""
+                             camera_offset: Tuple[int, int] = (0, 0)):
+        """
+        Renders all potions in a specific room to the given surface.
+
+        @param room_pos The room coordinates containing potions to draw
+        @param surface The pygame surface to render potions on
+        @param camera_offset Camera offset tuple for scrolling support
+        """
         potions = self.get_potions_in_room(room_pos)
         for potion in potions:
             potion.draw(surface, camera_offset)
 
     def draw_collection_ui(self, surface: pygame.Surface, x: int, y: int):
         """
-        Draw potion collection UI
+        Renders the potion collection user interface showing available potions.
 
-        Args:
-            surface: Surface to draw on
-            x: X position for UI
-            y: Y position for UI
+        Displays a background panel with the current count of consumable healing potions.
+
+        @param surface The pygame surface to draw the UI on
+        @param x The X position for the UI panel
+        @param y The Y position for the UI panel
         """
         font = pygame.font.Font(None, 24)
 
@@ -320,4 +419,4 @@ class PotionManager:
         # Draw potion count
         text = f"Healing Potions: {self.consumable_potions}"
         potion_text = font.render(text, True, (255, 255, 255))
-        surface.blit(potion_text, (x + 10, y + 5)) 
+        surface.blit(potion_text, (x + 10, y + 5))
